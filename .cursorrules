@@ -1,0 +1,37 @@
+# Cursor Rules for Lide Editor
+
+You are working on Lide, an ultra-fast, memory-lean desktop Python & polyglot IDE engineered in 100% pure Rust using Floem, embedded Astral Ruff, Tree-sitter, and Ripgrep.
+
+## Invariant Coding Rules
+
+1. **Pure Headless `editor-core`**:
+   - `crates/editor-core` must NEVER depend on Floem, Winit, GPU crates, or async runtimes.
+   - All text manipulation, cursor movement, auto-indentation, and undo/redo logic must run synchronously in headless unit tests.
+
+2. **Fine-Grained Floem Reactivity**:
+   - In `crates/app-floem`, never trigger monolithic screen redraws.
+   - All UI state must use discrete `RwSignal<T>`. Typing, scrolling, search queries, test logs, or AI streaming must update ONLY their respective components.
+
+3. **Non-Blocking UI Thread**:
+   - Never run disk I/O, regex searches, AST parsing, or formatting on the main thread.
+   - Offload to background Tokio threads and marshal results back to Floem with `create_ext_action`.
+
+4. **Coordinate Conversions**:
+   - `editor-core` uses 0-based lines (`0..rope.len_lines()`) and 0-based character offsets.
+   - Ripgrep (`SearchMatch`) and Pytest tracebacks emit 1-based lines. Always translate coordinates with `.saturating_sub(1)` when jumping to buffer positions.
+
+5. **Ephemeral AST Disposal**:
+   - When extracting outline symbols or enclosing contexts with Astral Ruff (`lang-python`), parse in microseconds and DROP the AST arena immediately. Never hold large AST trees in memory.
+
+6. **Atomic File Persistence**:
+   - Format-on-save must format in-memory with Astral Ruff, write to a temp file, and atomically rename over the target file.
+
+7. **Strict TDD**:
+   - Write or update headless unit tests (`cargo test -p <crate>`) before changing core logic.
+
+## Common Verification Commands
+
+- Run all tests: `cargo test --workspace`
+- Run core tests: `cargo test -p editor-core`
+- Run UI viewmodel tests: `cargo test -p app-floem`
+- Launch editor: `cargo run -p app-floem --release`

@@ -4,6 +4,8 @@ A lightweight, pure-Rust desktop IDE built on [Floem](https://github.com/lapce/f
 
 ---
 
+> **Note:** This editor is currently under active development and is not yet ready for production use.
+
 ## Why Lide? (Rationale & Motivation)
 
 Existing development environments like VS Code, PyCharm, and Neovim are mature and capable. However, they make distinct trade-offs:

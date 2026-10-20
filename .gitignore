@@ -60,7 +60,9 @@ htmlcov/
 *.sublime-workspace
 
 # AI Agent & Assistant scratch outputs
-.agents/
+.agents/*
+!.agents/skills/
+!.agents/rules/
 .system_generated/
 .claude/
 
