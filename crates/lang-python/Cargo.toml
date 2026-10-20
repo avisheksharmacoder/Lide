@@ -1,0 +1,15 @@
+[package]
+name = "lang-python"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+editor-core.workspace = true
+lang-contract.workspace = true
+tree-sitter.workspace = true
+tree-sitter-python.workspace = true
+streaming-iterator.workspace = true
+ruff_python_parser.workspace = true
+ruff_python_ast.workspace = true
+ruff_python_formatter.workspace = true
+ruff_text_size.workspace = true

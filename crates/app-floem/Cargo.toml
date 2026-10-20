@@ -1,0 +1,17 @@
+[package]
+name = "app-floem"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+editor-core.workspace = true
+lang-contract.workspace = true
+lang-python.workspace = true
+workspace-engine.workspace = true
+ai-engine.workspace = true
+floem.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+

@@ -1,0 +1,76 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/editor-core",
+    "crates/lang-contract",
+    "crates/lang-python",
+    "crates/workspace-engine",
+    "crates/ai-engine",
+    "crates/app-floem",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+editor-core = { path = "crates/editor-core" }
+lang-contract = { path = "crates/lang-contract" }
+lang-python = { path = "crates/lang-python" }
+workspace-engine = { path = "crates/workspace-engine" }
+ai-engine = { path = "crates/ai-engine" }
+
+tokio = { version = "1.40", features = [
+    "rt",
+    "rt-multi-thread",
+    "sync",
+    "macros",
+    "time",
+    "process",
+    "io-util",
+] }
+tokio-stream = "0.1.16"
+ollama-rs = { version = "0.3.6", features = ["stream"] }
+
+ignore = "0.4.23"
+grep-searcher = "0.1.14"
+grep-regex = "0.1.13"
+grep-matcher = "0.1.7"
+tempfile = "3.13.0"
+
+ropey = "1.6.1"
+unicode-segmentation = "1.12.0"
+
+# Incremental syntax highlighting
+tree-sitter = "0.24"
+tree-sitter-python = "0.23"
+streaming-iterator = "0.1"
+
+# Ephemeral Python AST & syntax analysis (Astral Ruff crates)
+ruff_python_parser = "0.0.15"
+ruff_python_ast = "0.0.15"
+ruff_text_size = "0.0.15"
+ruff_python_formatter = { git = "https://github.com/astral-sh/ruff", tag = "0.8.4" }
+
+# Floem GUI & Reactive Signals
+floem = "0.2.0"
+
+# Testing & Benchmarking
+proptest = "1.5.0"
+criterion = { version = "0.5.1", features = ["html_reports"] }
+
+# Compile parsers and ropey with optimizations even during `cargo test`
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.dev]
+codegen-units = 1
+
+[profile.test]
+codegen-units = 1
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

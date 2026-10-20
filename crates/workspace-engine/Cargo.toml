@@ -1,0 +1,16 @@
+[package]
+name = "workspace-engine"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+lang-contract.workspace = true
+lang-python.workspace = true
+ignore.workspace = true
+grep-searcher.workspace = true
+grep-regex.workspace = true
+grep-matcher.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

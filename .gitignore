@@ -1,0 +1,108 @@
+# ==============================================================================
+# Rust / Cargo Build Artifacts
+# ==============================================================================
+/target/
+**/target/
+**/*.rs.bk
+*.proptest-regressions
+Cargo.lock.bak
+
+# ==============================================================================
+# Python Runtime, Virtualenvs & Caches
+# ==============================================================================
+# Bytecode & compiled extensions
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+
+# Python virtual environments (local dev & pytest runs)
+.venv/
+venv/
+ENV/
+env/
+.env/
+env.bak/
+venv.bak/
+
+# Test runners, linters & type checkers
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# ==============================================================================
+# Editor & IDE Metadata
+# ==============================================================================
+# VS Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# JetBrains (RustRover / PyCharm / CLion / IntelliJ)
+.idea/
+*.iml
+
+# Vim / Emacs / Sublime
+*.swp
+*.swo
+*~
+.#*
+\#*#
+*.sublime-project
+*.sublime-workspace
+
+# AI Agent & Assistant scratch outputs
+.agents/
+.system_generated/
+.claude/
+
+# ==============================================================================
+# Environment Configurations & Secrets
+# ==============================================================================
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# ==============================================================================
+# Operating System Files
+# ==============================================================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+.fuse_hidden*
+.directory
+.Trash-*
+
+# ==============================================================================
+# Logs, Dumps & Benchmarks
+# ==============================================================================
+*.log
+*.tmp
+*.temp
+*.bak
+/criterion/
+flamegraph.svg
+perf.data*

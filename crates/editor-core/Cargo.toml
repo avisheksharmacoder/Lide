@@ -1,0 +1,16 @@
+[package]
+name = "editor-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ropey.workspace = true
+unicode-segmentation.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+criterion.workspace = true
+
+[[bench]]
+name = "buffer_bench"
+harness = false

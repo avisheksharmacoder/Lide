@@ -1,0 +1,11 @@
+[package]
+name = "ai-engine"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+lang-contract.workspace = true
+lang-python.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+ollama-rs.workspace = true

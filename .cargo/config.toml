@@ -1,0 +1,7 @@
+[build]
+# Limit cargo compilation to a single concurrent job/thread
+jobs = 1
+
+[env]
+# Ensure cargo test runs test cases sequentially on a single thread
+RUST_TEST_THREADS = "1"
