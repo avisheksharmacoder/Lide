@@ -1,6 +1,6 @@
 # Claude Assistant Guidelines for Lide Editor
 
-You are working on **Lide**, an ultra-fast, memory-lean desktop IDE written in 100% pure Rust using the **Floem** native GUI toolkit, with embedded **Astral Ruff**, **Tree-sitter**, and **Ripgrep**.
+You are working on **Lide**, an ultra-fast, memory-lean desktop IDE written in 100% pure Rust using the **Iced** native GUI toolkit (The Elm Architecture), with embedded **Astral Ruff**, **Tree-sitter**, and **Ripgrep**.
 
 ---
 

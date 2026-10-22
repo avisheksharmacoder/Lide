@@ -1,20 +1,20 @@
 # Cursor Rules for Lide Editor
 
-You are working on Lide, an ultra-fast, memory-lean desktop Python & polyglot IDE engineered in 100% pure Rust using Floem, embedded Astral Ruff, Tree-sitter, and Ripgrep.
+You are working on Lide, an ultra-fast, memory-lean desktop Python & polyglot IDE engineered in 100% pure Rust using Iced (The Elm Architecture), embedded Astral Ruff, Tree-sitter, and Ripgrep.
 
 ## Invariant Coding Rules
 
 1. **Pure Headless `editor-core`**:
-   - `crates/editor-core` must NEVER depend on Floem, Winit, GPU crates, or async runtimes.
+   - `crates/editor-core` must NEVER depend on Iced, Floem, Winit, GPU crates, or async runtimes.
    - All text manipulation, cursor movement, auto-indentation, and undo/redo logic must run synchronously in headless unit tests.
 
-2. **Fine-Grained Floem Reactivity**:
-   - In `crates/app-floem`, never trigger monolithic screen redraws.
-   - All UI state must use discrete `RwSignal<T>`. Typing, scrolling, search queries, test logs, or AI streaming must update ONLY their respective components.
+2. **The Elm Architecture (TEA) in `crates/app-iced`**:
+   - UI state is unified into `LideApp` with deterministic transitions in `update()` and pure rendering in `view()`.
+   - Never inject cursor glyphs into the text stream; carets are rendered as stacked overlays to ensure strict zero-shift layout.
 
-3. **Non-Blocking UI Thread**:
+3. **Non-Blocking UI Main Thread**:
    - Never run disk I/O, regex searches, AST parsing, or formatting on the main thread.
-   - Offload to background Tokio threads and marshal results back to Floem with `create_ext_action`.
+   - Offload to background Tokio threads and marshal results back to Iced with native `Task::stream` and `Subscription`.
 
 4. **Coordinate Conversions**:
    - `editor-core` uses 0-based lines (`0..rope.len_lines()`) and 0-based character offsets.
@@ -33,5 +33,6 @@ You are working on Lide, an ultra-fast, memory-lean desktop Python & polyglot ID
 
 - Run all tests: `cargo test --workspace`
 - Run core tests: `cargo test -p editor-core`
-- Run UI viewmodel tests: `cargo test -p app-floem`
-- Launch editor: `cargo run -p app-floem --release`
+- Run UI viewmodel tests: `cargo test -p app-iced`
+- Launch editor: `cargo run -p app-iced --release`
+
