@@ -5,7 +5,8 @@ use std::sync::Arc;
 
 use ai_engine::{AiEngine, AiTaskKind, OllamaStreamingClient};
 use app_floem::{
-    EditorCommand, EditorViewModel, FlatOutlineItem, RenderedLine, SidebarTab, StyledTextSegment,
+    ActiveMenu, EditorCommand, EditorViewModel, FlatOutlineItem, RenderedLine, SidebarTab,
+    StyledTextSegment,
 };
 use editor_core::{MoveDirection, Position};
 use floem::event::{Event, EventListener};
@@ -51,20 +52,6 @@ def entry_point(seed: int) -> float:
     return engine.compute_norm([float(seed), 3.14159, 2.71828])
 "#;
 
-fn generate_10k_benchmark_file() -> String {
-    let mut out = String::with_capacity(10_000 * 48);
-    out.push_str("import math\nfrom dataclasses import dataclass\n\n");
-    let mut lines = 3;
-    let mut idx = 0;
-    while lines < 10_000 {
-        out.push_str(&format!(
-            "@dataclass\nclass FastModel_{idx}:\n    def forward(self, tensor: float) -> float:\n        return tensor * 0.998 + {idx}\n\n"
-        ));
-        lines += 5;
-        idx += 1;
-    }
-    out
-}
 
 // ============================================================================
 // NON-BLOCKING TOKIO -> FLOEM UI STREAM BRIDGE (`create_ext_action`)
@@ -178,7 +165,110 @@ fn token_color(token: Option<HighlightToken>) -> Color {
     }
 }
 
-fn render_code_segment(line_text: &str, seg: &StyledTextSegment) -> impl IntoView {
+fn dropdown_menu_item(
+    title: &'static str,
+    shortcut: &'static str,
+    on_click: impl Fn() + 'static,
+) -> impl IntoView {
+    h_stack((
+        label(move || title.to_string()).style(|s| {
+            s.font_size(12.5)
+                .color(Color::rgb8(220, 224, 232))
+        }),
+        empty().style(|s| s.flex_grow(1.0)),
+        label(move || shortcut.to_string()).style(|s| {
+            s.font_size(11.0)
+                .color(Color::rgb8(130, 138, 150))
+                .font_family("Consolas".to_string())
+        }),
+    ))
+    .on_click_stop(move |_| on_click())
+    .style(|s| {
+        s.width_full()
+            .height(28.0)
+            .padding_horiz(12.0)
+            .items_center()
+            .cursor(CursorStyle::Pointer)
+            .border_radius(4.0)
+            .hover(|s| s.background(Color::rgb8(45, 50, 64)))
+    })
+}
+
+fn dropdown_divider() -> impl IntoView {
+    empty().style(|s| {
+        s.width_full()
+            .height(1.0)
+            .margin_vert(4.0)
+            .background(Color::rgb8(40, 44, 56))
+    })
+}
+
+fn font_choice_chip(
+    display_name: &'static str,
+    font_family_value: &'static str,
+    current_signal: RwSignal<String>,
+    on_select: impl Fn() + 'static,
+) -> impl IntoView {
+    let font_val = font_family_value.to_string();
+    h_stack((
+        label(move || display_name.to_string()).style(move |s| {
+            let is_sel = current_signal.get() == display_name;
+            s.font_size(12.0)
+                .font_family(font_val.clone())
+                .color(if is_sel {
+                    Color::WHITE
+                } else {
+                    Color::rgb8(190, 196, 208)
+                })
+        }),
+        label(move || {
+            if current_signal.get() == display_name {
+                "  ✓"
+            } else {
+                ""
+            }
+        })
+        .style(move |s| {
+            s.font_size(11.0)
+                .font_bold()
+                .color(Color::rgb8(152, 195, 121))
+        }),
+    ))
+    .on_click_stop(move |_| on_select())
+    .style(move |s| {
+        let is_sel = current_signal.get() == display_name;
+        s.padding_horiz(12.0)
+            .padding_vert(6.0)
+            .margin_right(8.0)
+            .margin_bottom(6.0)
+            .border_radius(5.0)
+            .cursor(CursorStyle::Pointer)
+            .border(1.0)
+            .border_color(if is_sel {
+                Color::rgb8(97, 175, 239)
+            } else {
+                Color::rgb8(45, 50, 65)
+            })
+            .background(if is_sel {
+                Color::rgb8(36, 44, 60)
+            } else {
+                Color::rgb8(28, 31, 40)
+            })
+            .hover(move |s| {
+                if current_signal.get() != display_name {
+                    s.background(Color::rgb8(42, 48, 64))
+                } else {
+                    s
+                }
+            })
+    })
+}
+
+fn render_code_segment(
+    line_text: &str,
+    seg: &StyledTextSegment,
+    editor_font: RwSignal<String>,
+) -> impl IntoView {
     let slice = line_text
         .get(seg.rel_byte_range.clone())
         .unwrap_or("")
@@ -188,13 +278,14 @@ fn render_code_segment(line_text: &str, seg: &StyledTextSegment) -> impl IntoVie
     label(move || slice.clone()).style(move |s| {
         s.color(fg)
             .font_size(13.5)
-            .font_family("JetBrains Mono, Fira Code, Consolas, monospace".to_string())
+            .font_family(editor_font.get())
     })
 }
 
 fn render_editor_row(
     row: RenderedLine,
     vm_handle: Rc<RefCell<EditorViewModel>>,
+    editor_font: RwSignal<String>,
 ) -> impl IntoView {
     let line_idx = row.line_idx;
     let gutter_num = row.gutter_number;
@@ -213,44 +304,58 @@ fn render_editor_row(
     };
 
     let row_bg = if is_active {
-        Color::rgb8(38, 43, 54)
+        Color::rgb8(33, 37, 48)
     } else {
-        Color::rgb8(24, 26, 31)
+        Color::rgb8(26, 28, 35)
     };
 
     let gutter_fg = if is_active {
-        Color::rgb8(212, 218, 226)
+        Color::rgb8(240, 244, 250)
     } else {
         Color::rgb8(92, 99, 112)
     };
 
+    let is_empty = text_clone.is_empty();
+
     h_stack((
+        label(|| "▎".to_string()).style(move |s| {
+            s.width(4.0)
+                .font_size(12.0)
+                .color(Color::rgb8(97, 175, 239))
+                .apply_if(!is_active, |s| s.hide())
+        }),
         h_stack((
             label(move || badge_str.to_string())
                 .style(move |s| s.width(14.0).font_size(11.0).color(badge_color)),
             label(move || format!("{gutter_num:>5}")).style(move |s| {
-                s.width(48.0)
+                s.width(46.0)
                     .font_size(12.5)
                     .color(gutter_fg)
-                    .font_family("Consolas, monospace".to_string())
+                    .font_family(editor_font.get())
             }),
         ))
         .style(|s| {
-            s.padding_left(8.0)
+            s.padding_left(6.0)
                 .padding_right(12.0)
                 .items_center()
-                .border_right(1.0)
-                .border_color(Color::rgb8(36, 40, 48))
         }),
         dyn_stack(
             move || segments.clone().into_iter().enumerate(),
             move |(idx, seg)| (*idx, seg.rel_byte_range.start, seg.rel_byte_range.end),
-            move |(_, seg)| render_code_segment(&text_clone, &seg),
+            move |(_, seg)| render_code_segment(&text_clone, &seg, editor_font),
         )
-        .style(|s| s.padding_left(12.0).items_center()),
+        .style(|s| s.padding_left(10.0).items_center()),
+        label(|| "▏".to_string()).style(move |s| {
+            s.width(6.0)
+                .font_size(13.5)
+                .color(Color::rgb8(97, 175, 239))
+                .font_family(editor_font.get())
+                .apply_if(!is_active || !is_empty, |s| s.hide())
+        }),
     ))
     .on_click_stop(move |_| {
         let mut vm = vm_handle.borrow_mut();
+        vm.dispatch(EditorCommand::CloseMenu);
         vm.dispatch(EditorCommand::SetCursor(Position::new(line_idx, 0)));
     })
     .style(move |s| {
@@ -289,6 +394,7 @@ fn render_workspace_file_item(
     ))
     .on_click_stop(move |_| {
         let mut vm = vm_handle.borrow_mut();
+        vm.dispatch(EditorCommand::CloseMenu);
         vm.dispatch(EditorCommand::OpenWorkspaceFile(full_path.clone()));
     })
     .style(|s| {
@@ -297,7 +403,7 @@ fn render_workspace_file_item(
             .padding_horiz(10.0)
             .items_center()
             .cursor(CursorStyle::Pointer)
-            .hover(|s| s.background(Color::rgb8(40, 44, 52)))
+            .hover(|s| s.background(Color::rgb8(34, 38, 48)))
     })
 }
 
@@ -338,6 +444,7 @@ fn render_outline_item(
     ))
     .on_click_stop(move |_| {
         let mut vm = vm_handle.borrow_mut();
+        vm.dispatch(EditorCommand::CloseMenu);
         vm.dispatch(EditorCommand::ClickStructureSymbol {
             start_line: target_line,
         });
@@ -348,7 +455,7 @@ fn render_outline_item(
             .padding_left(indent_px)
             .items_center()
             .cursor(CursorStyle::Pointer)
-            .hover(|s| s.background(Color::rgb8(40, 44, 52)))
+            .hover(|s| s.background(Color::rgb8(34, 38, 48)))
     })
 }
 
@@ -371,16 +478,17 @@ fn render_search_match_row(
                 .font_size(12.0)
                 .font_bold()
                 .color(Color::rgb8(97, 175, 239))
-                .font_family("Consolas, monospace".to_string())
+                .font_family("Consolas".to_string())
         }),
         label(move || snippet.clone()).style(|s| {
             s.font_size(12.0)
                 .color(Color::rgb8(212, 218, 226))
-                .font_family("Consolas, monospace".to_string())
+                .font_family("Consolas".to_string())
         }),
     ))
     .on_click_stop(move |_| {
         let mut vm = vm_handle.borrow_mut();
+        vm.dispatch(EditorCommand::CloseMenu);
         vm.dispatch(EditorCommand::ClickSearchResult(hit_for_click.clone()));
     })
     .style(|s| {
@@ -389,7 +497,7 @@ fn render_search_match_row(
             .padding_horiz(14.0)
             .items_center()
             .cursor(CursorStyle::Pointer)
-            .hover(|s| s.background(Color::rgb8(38, 43, 54)))
+            .hover(|s| s.background(Color::rgb8(34, 38, 48)))
     })
 }
 
@@ -411,16 +519,17 @@ fn render_pytest_failure_row(
             s.font_size(12.0)
                 .font_bold()
                 .color(Color::rgb8(224, 108, 117))
-                .font_family("Consolas, monospace".to_string())
+                .font_family("Consolas".to_string())
         }),
         label(move || format!("  {}", msg_label)).style(|s| {
             s.font_size(11.5)
                 .color(Color::rgb8(171, 178, 191))
-                .font_family("Consolas, monospace".to_string())
+                .font_family("Consolas".to_string())
         }),
     ))
     .on_click_stop(move |_| {
         let mut vm = vm_handle.borrow_mut();
+        vm.dispatch(EditorCommand::CloseMenu);
         vm.dispatch(EditorCommand::ClickPytestFailure(failure_for_click.clone()));
     })
     .style(|s| {
@@ -428,9 +537,7 @@ fn render_pytest_failure_row(
             .padding_horiz(12.0)
             .padding_vert(4.0)
             .cursor(CursorStyle::Pointer)
-            .border_bottom(1.0)
-            .border_color(Color::rgb8(34, 38, 46))
-            .hover(|s| s.background(Color::rgb8(38, 43, 54)))
+            .hover(|s| s.background(Color::rgb8(34, 38, 48)))
     })
 }
 
@@ -452,12 +559,33 @@ fn app_view(tokio_handle: TokioHandle) -> impl IntoView {
     let ai_engine = Arc::new(AiEngine::new(OllamaStreamingClient::default()));
     let pytest_runner = Arc::new(PytestRunner::new(ProcessPytestExecutor::new()));
 
-    let vm_load_10k = vm.clone();
-    let vm_load_sample = vm.clone();
-    let vm_save = vm.clone();
-    let vm_toggle_ai = vm.clone();
-    let vm_toggle_search = vm.clone();
-    let vm_toggle_pytest = vm.clone();
+    let vm_menu_file = vm.clone();
+    let vm_menu_settings = vm.clone();
+    let vm_file_new = vm.clone();
+    let vm_file_open = vm.clone();
+    let vm_file_save = vm.clone();
+    let vm_file_close = vm.clone();
+
+    let vm_sett_search = vm.clone();
+    let vm_sett_pytest = vm.clone();
+    let vm_sett_ai = vm.clone();
+    let vm_sett_fonts = vm.clone();
+    let vm_sett_close = vm.clone();
+
+    let vm_font_close = vm.clone();
+    let vm_font_done = vm.clone();
+    let vm_font_reset = vm.clone();
+    let vm_font_backdrop = vm.clone();
+    let vm_font_ide_quick = vm.clone();
+    let vm_font_ide_segoe = vm.clone();
+    let vm_font_ide_inter = vm.clone();
+    let vm_font_ed_jb = vm.clone();
+    let vm_font_ed_cascadia = vm.clone();
+    let vm_font_ed_consolas = vm.clone();
+    let vm_font_term_jb = vm.clone();
+    let vm_font_term_cascadia = vm.clone();
+    let vm_font_term_consolas = vm.clone();
+
     let vm_tab_files = vm.clone();
     let vm_tab_struct = vm.clone();
     let vm_files_list = vm.clone();
@@ -491,132 +619,236 @@ fn app_view(tokio_handle: TokioHandle) -> impl IntoView {
     let rt_pt_all = tokio_handle.clone();
     let rt_pt_file = tokio_handle.clone();
 
-    // Top Header Bar
+    // Top Header Bar & Brand
     let top_bar = h_stack((
-        label(|| "PyRust IDE v1.0".to_string()).style(|s| {
-            s.font_size(13.5)
-                .font_bold()
-                .color(Color::rgb8(229, 192, 123))
-                .margin_right(16.0)
+        h_stack((
+            label(|| "LIDE".to_string()).style(move |s| {
+                s.font_size(13.5)
+                    .font_bold()
+                    .color(Color::rgb8(97, 175, 239))
+                    .font_family(signals.ide_font.get())
+            }),
+        ))
+        .style(|s| s.margin_right(18.0).items_center()),
+
+        // File Menu Trigger Button
+        label(|| "File".to_string())
+            .on_click_stop(move |_| {
+                vm_menu_file
+                    .borrow_mut()
+                    .dispatch(EditorCommand::ToggleMenu(ActiveMenu::File));
+            })
+            .style(move |s| {
+                let is_active = signals.active_menu.get() == ActiveMenu::File;
+                s.padding_horiz(12.0)
+                    .padding_vert(5.0)
+                    .margin_right(4.0)
+                    .font_size(12.5)
+                    .font_family(signals.ide_font.get())
+                    .color(if is_active {
+                        Color::WHITE
+                    } else {
+                        Color::rgb8(212, 218, 226)
+                    })
+                    .background(if is_active {
+                        Color::rgb8(45, 52, 68)
+                    } else {
+                        Color::TRANSPARENT
+                    })
+                    .border_radius(4.0)
+                    .cursor(CursorStyle::Pointer)
+                    .hover(|s| s.background(Color::rgb8(38, 43, 56)))
+            }),
+
+        // Settings Menu Trigger Button
+        label(|| "Settings".to_string())
+            .on_click_stop(move |_| {
+                vm_menu_settings
+                    .borrow_mut()
+                    .dispatch(EditorCommand::ToggleMenu(ActiveMenu::Settings));
+            })
+            .style(move |s| {
+                let is_active = signals.active_menu.get() == ActiveMenu::Settings;
+                s.padding_horiz(12.0)
+                    .padding_vert(5.0)
+                    .margin_right(8.0)
+                    .font_size(12.5)
+                    .font_family(signals.ide_font.get())
+                    .color(if is_active {
+                        Color::WHITE
+                    } else {
+                        Color::rgb8(212, 218, 226)
+                    })
+                    .background(if is_active {
+                        Color::rgb8(45, 52, 68)
+                    } else {
+                        Color::TRANSPARENT
+                    })
+                    .border_radius(4.0)
+                    .cursor(CursorStyle::Pointer)
+                    .hover(|s| s.background(Color::rgb8(38, 43, 56)))
+            }),
+
+        empty().style(|s| s.flex_grow(1.0)),
+
+        // Active Document name indicator
+        label(move || {
+            if let Some(path) = signals.active_file_path.get() {
+                path.file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "Untitled".to_string())
+            } else {
+                "demo.py".to_string()
+            }
+        })
+        .style(|s| {
+            s.font_size(12.0)
+                .color(Color::rgb8(140, 148, 162))
+                .margin_right(14.0)
         }),
-        label(|| "Load Sample".to_string())
-            .on_click_stop(move |_| {
-                let mut model = vm_load_sample.borrow_mut();
-                model.dispatch(EditorCommand::LoadSource(INITIAL_PYTHON_SAMPLE.to_string()));
-                model.dispatch(EditorCommand::RunEphemeralAnalysis);
-            })
-            .style(|s| {
-                s.padding_horiz(10.0)
-                    .padding_vert(4.0)
-                    .margin_right(8.0)
-                    .font_size(12.0)
-                    .background(Color::rgb8(45, 50, 60))
-                    .color(Color::rgb8(212, 218, 226))
-                    .border_radius(4.0)
-                    .cursor(CursorStyle::Pointer)
-            }),
-        label(|| "10,000-Line Benchmark".to_string())
-            .on_click_stop(move |_| {
-                let mut model = vm_load_10k.borrow_mut();
-                model.dispatch(EditorCommand::LoadSource(generate_10k_benchmark_file()));
-                model.dispatch(EditorCommand::RunEphemeralAnalysis);
-            })
-            .style(|s| {
-                s.padding_horiz(10.0)
-                    .padding_vert(4.0)
-                    .margin_right(8.0)
-                    .font_size(12.0)
-                    .background(Color::rgb8(56, 82, 118))
-                    .color(Color::WHITE)
-                    .border_radius(4.0)
-                    .cursor(CursorStyle::Pointer)
-            }),
-        label(|| "Save & Ruff Format (Ctrl+S)".to_string())
-            .on_click_stop(move |_| {
-                let mut model = vm_save.borrow_mut();
-                model.dispatch(EditorCommand::SaveActiveFile);
-            })
-            .style(|s| {
-                s.padding_horiz(10.0)
-                    .padding_vert(4.0)
-                    .margin_right(8.0)
-                    .font_size(12.0)
-                    .background(Color::rgb8(48, 92, 68))
-                    .color(Color::WHITE)
-                    .border_radius(4.0)
-                    .cursor(CursorStyle::Pointer)
-            }),
-        label(|| "Find in Files (Ctrl+Shift+F)".to_string())
-            .on_click_stop(move |_| {
-                vm_toggle_search
-                    .borrow_mut()
-                    .dispatch(EditorCommand::ToggleSearchPanel);
-            })
-            .style(move |s| {
-                let open = signals.search_panel_open.get();
-                s.padding_horiz(10.0)
-                    .padding_vert(4.0)
-                    .margin_right(8.0)
-                    .font_size(12.0)
-                    .background(if open {
-                        Color::rgb8(168, 112, 48)
-                    } else {
-                        Color::rgb8(65, 58, 48)
-                    })
-                    .color(Color::WHITE)
-                    .border_radius(4.0)
-                    .cursor(CursorStyle::Pointer)
-            }),
-        label(|| "Pytest Runner (Ctrl+Shift+T)".to_string())
-            .on_click_stop(move |_| {
-                vm_toggle_pytest
-                    .borrow_mut()
-                    .dispatch(EditorCommand::TogglePytestPanel);
-            })
-            .style(move |s| {
-                let open = signals.pytest_panel_open.get();
-                s.padding_horiz(10.0)
-                    .padding_vert(4.0)
-                    .margin_right(8.0)
-                    .font_size(12.0)
-                    .background(if open {
-                        Color::rgb8(48, 118, 128)
-                    } else {
-                        Color::rgb8(42, 64, 72)
-                    })
-                    .color(Color::WHITE)
-                    .border_radius(4.0)
-                    .cursor(CursorStyle::Pointer)
-            }),
-        label(|| "AI Assistant (Ctrl+I)".to_string())
-            .on_click_stop(move |_| {
-                vm_toggle_ai
-                    .borrow_mut()
-                    .dispatch(EditorCommand::ToggleAiPane);
-            })
-            .style(move |s| {
-                let open = signals.ai_pane_open.get();
-                s.padding_horiz(10.0)
-                    .padding_vert(4.0)
-                    .font_size(12.0)
-                    .background(if open {
-                        Color::rgb8(138, 82, 172)
-                    } else {
-                        Color::rgb8(68, 52, 92)
-                    })
-                    .color(Color::WHITE)
-                    .border_radius(4.0)
-                    .cursor(CursorStyle::Pointer)
-            }),
+
+        // Quick indicator pill for dirty state
+        label(|| "● Modified".to_string()).style(move |s| {
+            let dirty = signals.is_dirty.get();
+            s.font_size(11.0)
+                .color(Color::rgb8(229, 192, 123))
+                .margin_right(10.0)
+                .apply_if(!dirty, |s| s.hide())
+        }),
     ))
     .style(|s| {
         s.width_full()
-            .height(38.0)
+            .height(36.0)
             .padding_horiz(14.0)
             .items_center()
-            .background(Color::rgb8(30, 33, 40))
-            .border_bottom(1.0)
-            .border_color(Color::rgb8(45, 50, 60))
+            .background(Color::rgb8(26, 28, 35))
+    });
+
+    let file_dropdown = v_stack((
+        dropdown_menu_item("New File", "Ctrl+N", {
+            let vm = vm_file_new.clone();
+            move || {
+                vm.borrow_mut().dispatch(EditorCommand::NewDocument);
+            }
+        }),
+        dropdown_menu_item("Open Workspace...", "Ctrl+O", {
+            let vm = vm_file_open.clone();
+            move || {
+                if let Ok(cwd) = std::env::current_dir() {
+                    let mut m = vm.borrow_mut();
+                    m.dispatch(EditorCommand::OpenWorkspace(cwd));
+                    m.dispatch(EditorCommand::CloseMenu);
+                }
+            }
+        }),
+        dropdown_menu_item("Save Active File", "Ctrl+S", {
+            let vm = vm_file_save.clone();
+            move || {
+                let mut m = vm.borrow_mut();
+                m.dispatch(EditorCommand::SaveActiveFile);
+                m.dispatch(EditorCommand::CloseMenu);
+            }
+        }),
+        dropdown_divider(),
+        dropdown_menu_item("Close Menu", "Esc", {
+            let vm = vm_file_close.clone();
+            move || {
+                vm.borrow_mut().dispatch(EditorCommand::CloseMenu);
+            }
+        }),
+    ))
+    .style(move |s| {
+        let is_open = signals.active_menu.get() == ActiveMenu::File;
+        s.absolute()
+            .inset_top(36.0)
+            .inset_left(64.0)
+            .z_index(100)
+            .width(240.0)
+            .padding_vert(6.0)
+            .padding_horiz(4.0)
+            .background(Color::rgb8(33, 36, 46))
+            .border(1.0)
+            .border_color(Color::rgb8(48, 54, 70))
+            .border_radius(6.0)
+            .apply_if(!is_open, |s| s.hide())
+    });
+
+    let settings_dropdown = v_stack((
+        dropdown_menu_item("Toggle Find in Files", "Ctrl+Shift+F", {
+            let vm = vm_sett_search.clone();
+            move || {
+                let mut m = vm.borrow_mut();
+                m.dispatch(EditorCommand::ToggleSearchPanel);
+                m.dispatch(EditorCommand::CloseMenu);
+            }
+        }),
+        dropdown_menu_item("Toggle Pytest Runner", "Ctrl+Shift+T", {
+            let vm = vm_sett_pytest.clone();
+            move || {
+                let mut m = vm.borrow_mut();
+                m.dispatch(EditorCommand::TogglePytestPanel);
+                m.dispatch(EditorCommand::CloseMenu);
+            }
+        }),
+        dropdown_menu_item("Toggle AI Assistant", "Ctrl+I", {
+            let vm = vm_sett_ai.clone();
+            move || {
+                let mut m = vm.borrow_mut();
+                m.dispatch(EditorCommand::ToggleAiPane);
+                m.dispatch(EditorCommand::CloseMenu);
+            }
+        }),
+        dropdown_divider(),
+        dropdown_menu_item("Font Settings...", "Fonts", {
+            let vm = vm_sett_fonts.clone();
+            move || {
+                let mut m = vm.borrow_mut();
+                m.dispatch(EditorCommand::ToggleFontDialog);
+            }
+        }),
+        dropdown_divider(),
+        h_stack((
+            label(|| "AI Model:".to_string()).style(|s| s.font_size(12.0).color(Color::rgb8(170, 178, 190))),
+            empty().style(|s| s.flex_grow(1.0)),
+            label(move || signals.ai_model_name.get()).style(|s| {
+                s.font_size(11.5)
+                    .color(Color::rgb8(198, 120, 221))
+                    .font_family("Consolas".to_string())
+            }),
+        ))
+        .style(|s| s.width_full().height(26.0).padding_horiz(12.0).items_center()),
+        h_stack((
+            label(|| "Format on Save:".to_string()).style(|s| s.font_size(12.0).color(Color::rgb8(170, 178, 190))),
+            empty().style(|s| s.flex_grow(1.0)),
+            label(|| "Enabled (Ruff)".to_string()).style(|s| {
+                s.font_size(11.5)
+                    .color(Color::rgb8(152, 195, 121))
+                    .font_family("Consolas".to_string())
+            }),
+        ))
+        .style(|s| s.width_full().height(26.0).padding_horiz(12.0).items_center()),
+        dropdown_divider(),
+        dropdown_menu_item("Close Menu", "Esc", {
+            let vm = vm_sett_close.clone();
+            move || {
+                vm.borrow_mut().dispatch(EditorCommand::CloseMenu);
+            }
+        }),
+    ))
+    .style(move |s| {
+        let is_open = signals.active_menu.get() == ActiveMenu::Settings;
+        s.absolute()
+            .inset_top(36.0)
+            .inset_left(120.0)
+            .z_index(100)
+            .width(280.0)
+            .padding_vert(6.0)
+            .padding_horiz(4.0)
+            .background(Color::rgb8(33, 36, 46))
+            .border(1.0)
+            .border_color(Color::rgb8(48, 54, 70))
+            .border_radius(6.0)
+            .apply_if(!is_open, |s| s.hide())
     });
 
     // Left Dual-Mode Sidebar (Project Files | Ruff AST Structure)
@@ -642,7 +874,7 @@ fn app_view(tokio_handle: TokioHandle) -> impl IntoView {
                         Color::rgb8(130, 138, 152)
                     })
                     .background(if is_active {
-                        Color::rgb8(36, 40, 48)
+                        Color::rgb8(32, 35, 44)
                     } else {
                         Color::TRANSPARENT
                     })
@@ -668,17 +900,13 @@ fn app_view(tokio_handle: TokioHandle) -> impl IntoView {
                         Color::rgb8(130, 138, 152)
                     })
                     .background(if is_active {
-                        Color::rgb8(36, 40, 48)
+                        Color::rgb8(32, 35, 44)
                     } else {
                         Color::TRANSPARENT
                     })
             }),
     ))
-    .style(|s| {
-        s.width_full()
-            .border_bottom(1.0)
-            .border_color(Color::rgb8(36, 40, 48))
-    });
+    .style(|s| s.width_full());
 
     let files_pane = scroll(
         dyn_stack(
@@ -717,9 +945,7 @@ fn app_view(tokio_handle: TokioHandle) -> impl IntoView {
     let left_sidebar = v_stack((sidebar_tab_header, files_pane, structure_pane)).style(|s| {
         s.width(250.0)
             .height_full()
-            .background(Color::rgb8(28, 31, 38))
-            .border_right(1.0)
-            .border_color(Color::rgb8(40, 44, 52))
+            .background(Color::rgb8(20, 22, 28))
     });
 
     // Center Virtualized Viewport
@@ -729,17 +955,18 @@ fn app_view(tokio_handle: TokioHandle) -> impl IntoView {
             (
                 row.line_idx,
                 row.is_active_line,
+                row.cursor_col,
                 row.highest_diagnostic,
                 row.text.clone(),
             )
         },
-        move |row| render_editor_row(row, vm_rows.clone()),
+        move |row| render_editor_row(row, vm_rows.clone(), signals.editor_font),
     )
     .style(|s| {
         s.flex_col()
             .flex_grow(1.0)
             .height_full()
-            .background(Color::rgb8(24, 26, 31))
+            .background(Color::rgb8(26, 28, 35))
     })
     .on_event_stop(EventListener::PointerWheel, move |event| {
         if let Event::PointerWheel(wheel_event) = event {
@@ -763,8 +990,6 @@ fn app_view(tokio_handle: TokioHandle) -> impl IntoView {
                     .font_size(11.0)
                     .font_bold()
                     .color(Color::rgb8(198, 120, 221))
-                    .border_bottom(1.0)
-                    .border_color(Color::rgb8(36, 40, 48))
             },
         ),
         label(move || match signals.active_ai_context.get() {
@@ -782,7 +1007,7 @@ fn app_view(tokio_handle: TokioHandle) -> impl IntoView {
                 .padding_vert(6.0)
                 .font_size(11.5)
                 .color(Color::rgb8(229, 192, 123))
-                .background(Color::rgb8(33, 37, 45))
+                .background(Color::rgb8(28, 31, 39))
         }),
         h_stack((
             label(|| "+ Docstring".to_string())
@@ -867,13 +1092,13 @@ fn app_view(tokio_handle: TokioHandle) -> impl IntoView {
                     .padding(12.0)
                     .font_size(12.5)
                     .color(Color::rgb8(152, 195, 121))
-                    .font_family("Consolas, monospace".to_string())
+                    .font_family("Consolas".to_string())
             }),
         )
         .style(|s| {
             s.width_full()
                 .flex_grow(1.0)
-                .background(Color::rgb8(20, 22, 27))
+                .background(Color::rgb8(18, 19, 25))
         }),
         h_stack((
             label(|| "Apply Refactor to Buffer (Undoable via Ctrl+Z)".to_string())
@@ -910,16 +1135,12 @@ fn app_view(tokio_handle: TokioHandle) -> impl IntoView {
         .style(|s| {
             s.width_full()
                 .padding(10.0)
-                .border_top(1.0)
-                .border_color(Color::rgb8(36, 40, 48))
         }),
     ))
     .style(move |s| {
         s.width(350.0)
             .height_full()
-            .background(Color::rgb8(28, 31, 38))
-            .border_left(1.0)
-            .border_color(Color::rgb8(40, 44, 52))
+            .background(Color::rgb8(22, 24, 31))
             .apply_if(!signals.ai_pane_open.get(), |s| s.hide())
     });
 
@@ -945,10 +1166,10 @@ fn app_view(tokio_handle: TokioHandle) -> impl IntoView {
                     .padding_vert(3.0)
                     .margin_right(10.0)
                     .font_size(12.0)
-                    .background(Color::rgb8(20, 22, 27))
+                    .background(Color::rgb8(18, 19, 25))
                     .color(Color::rgb8(152, 195, 121))
                     .border_radius(4.0)
-                    .font_family("Consolas, monospace".to_string())
+                    .font_family("Consolas".to_string())
             }),
             label(|| "Search `def |fn `".to_string())
                 .on_click_stop(move |_| {
@@ -997,9 +1218,7 @@ fn app_view(tokio_handle: TokioHandle) -> impl IntoView {
                 .height(34.0)
                 .padding_horiz(14.0)
                 .items_center()
-                .background(Color::rgb8(30, 33, 40))
-                .border_bottom(1.0)
-                .border_color(Color::rgb8(40, 44, 52))
+                .background(Color::rgb8(24, 26, 33))
         }),
         scroll(
             dyn_stack(
@@ -1014,9 +1233,7 @@ fn app_view(tokio_handle: TokioHandle) -> impl IntoView {
     .style(move |s| {
         s.width_full()
             .height(175.0)
-            .background(Color::rgb8(24, 26, 31))
-            .border_top(1.0)
-            .border_color(Color::rgb8(45, 50, 60))
+            .background(Color::rgb8(20, 22, 28))
             .apply_if(!signals.search_panel_open.get(), |s| s.hide())
     });
 
@@ -1098,9 +1315,7 @@ fn app_view(tokio_handle: TokioHandle) -> impl IntoView {
                 .height(34.0)
                 .padding_horiz(14.0)
                 .items_center()
-                .background(Color::rgb8(30, 33, 40))
-                .border_bottom(1.0)
-                .border_color(Color::rgb8(40, 44, 52))
+                .background(Color::rgb8(24, 26, 33))
         }),
         // Split body: Left = Clickable Failures, Right = Live Streaming Stdout Lines
         h_stack((
@@ -1115,21 +1330,19 @@ fn app_view(tokio_handle: TokioHandle) -> impl IntoView {
             .style(|s| {
                 s.width(380.0)
                     .height_full()
-                    .background(Color::rgb8(24, 26, 31))
-                    .border_right(1.0)
-                    .border_color(Color::rgb8(38, 42, 50))
+                    .background(Color::rgb8(22, 24, 30))
             }),
             scroll(
                 dyn_stack(
                     move || signals.pytest_output_lines.get().into_iter().enumerate(),
                     move |(idx, line)| (*idx, line.clone()),
                     move |(_, line)| {
-                        label(move || line.clone()).style(|s| {
+                        label(move || line.clone()).style(move |s| {
                             s.padding_horiz(12.0)
                                 .padding_vert(1.5)
                                 .font_size(12.0)
                                 .color(Color::rgb8(180, 188, 200))
-                                .font_family("Consolas, monospace".to_string())
+                                .font_family(signals.terminal_font.get())
                         })
                     },
                 )
@@ -1138,7 +1351,7 @@ fn app_view(tokio_handle: TokioHandle) -> impl IntoView {
             .style(|s| {
                 s.flex_grow(1.0)
                     .height_full()
-                    .background(Color::rgb8(20, 22, 27))
+                    .background(Color::rgb8(18, 19, 25))
             }),
         ))
         .style(|s| s.width_full().flex_grow(1.0)),
@@ -1146,27 +1359,333 @@ fn app_view(tokio_handle: TokioHandle) -> impl IntoView {
     .style(move |s| {
         s.width_full()
             .height(190.0)
-            .background(Color::rgb8(24, 26, 31))
-            .border_top(1.0)
-            .border_color(Color::rgb8(45, 50, 60))
+            .background(Color::rgb8(20, 22, 28))
             .apply_if(!signals.pytest_panel_open.get(), |s| s.hide())
     });
 
     // Bottom Status Bar
-    let status_bar = h_stack((label(move || signals.status_bar_text.get()).style(|s| {
+    let status_bar = h_stack((label(move || signals.status_bar_text.get()).style(move |s| {
         s.font_size(12.0)
             .color(Color::rgb8(180, 188, 200))
-            .font_family("Consolas, monospace".to_string())
+            .font_family(signals.ide_font.get())
     }),))
     .style(|s| {
         s.width_full()
             .height(26.0)
             .padding_horiz(14.0)
             .items_center()
-            .background(Color::rgb8(33, 37, 43))
-            .border_top(1.0)
-            .border_color(Color::rgb8(45, 50, 60))
+            .background(Color::rgb8(18, 19, 24))
     });
+
+    // Font Configuration Modal Dialog Overlay
+    let font_settings_dialog = {
+        let vm_close_hdr = vm_font_close.clone();
+        let vm_done_btn = vm_font_done.clone();
+        let vm_reset_btn = vm_font_reset.clone();
+        let vm_backdrop = vm_font_backdrop.clone();
+
+        v_stack((
+            // Dialog Card
+            v_stack((
+                // Header row
+                h_stack((
+                    v_stack((
+                        label(|| "Typography & Font Settings".to_string()).style(move |s| {
+                            s.font_size(16.0)
+                                .font_bold()
+                                .font_family(signals.ide_font.get())
+                                .color(Color::rgb8(240, 244, 252))
+                        }),
+                        label(|| "Configure typefaces for IDE UI, code editor viewport, and terminal.".to_string()).style(move |s| {
+                            s.font_size(12.0)
+                                .font_family(signals.ide_font.get())
+                                .color(Color::rgb8(140, 148, 162))
+                                .margin_top(2.0)
+                        }),
+                    )),
+                    empty().style(|s| s.flex_grow(1.0)),
+                    label(|| "✕".to_string())
+                        .on_click_stop(move |_| {
+                            vm_close_hdr.borrow_mut().dispatch(EditorCommand::ToggleFontDialog);
+                        })
+                        .style(|s| {
+                            s.font_size(15.0)
+                                .color(Color::rgb8(150, 158, 172))
+                                .cursor(CursorStyle::Pointer)
+                                .padding(6.0)
+                                .hover(|s| s.color(Color::WHITE))
+                        }),
+                ))
+                .style(|s| s.width_full().margin_bottom(16.0)),
+
+                // Section 1: IDE / UI Font
+                label(|| "1. IDE / UI Font".to_string()).style(move |s| {
+                    s.font_size(12.5)
+                        .font_bold()
+                        .font_family(signals.ide_font.get())
+                        .color(Color::rgb8(97, 175, 239))
+                        .margin_bottom(6.0)
+                }),
+                h_stack((
+                    font_choice_chip(
+                        "Quicksand",
+                        "Quicksand",
+                        signals.ide_font,
+                        {
+                            let vm = vm_font_ide_quick.clone();
+                            move || {
+                                vm.borrow_mut().dispatch(EditorCommand::SetIdeFont("Quicksand".to_string()));
+                            }
+                        },
+                    ),
+                    font_choice_chip(
+                        "Segoe UI",
+                        "Segoe UI",
+                        signals.ide_font,
+                        {
+                            let vm = vm_font_ide_segoe.clone();
+                            move || {
+                                vm.borrow_mut().dispatch(EditorCommand::SetIdeFont("Segoe UI".to_string()));
+                            }
+                        },
+                    ),
+                    font_choice_chip(
+                        "Inter",
+                        "Inter",
+                        signals.ide_font,
+                        {
+                            let vm = vm_font_ide_inter.clone();
+                            move || {
+                                vm.borrow_mut().dispatch(EditorCommand::SetIdeFont("Inter".to_string()));
+                            }
+                        },
+                    ),
+                ))
+                .style(|s| s.width_full().margin_bottom(12.0)),
+
+                // Section 2: Code Editor Font
+                label(|| "2. Code Editor Font".to_string()).style(move |s| {
+                    s.font_size(12.5)
+                        .font_bold()
+                        .font_family(signals.ide_font.get())
+                        .color(Color::rgb8(152, 195, 121))
+                        .margin_bottom(6.0)
+                }),
+                h_stack((
+                    font_choice_chip(
+                        "JetBrains Mono",
+                        "JetBrains Mono",
+                        signals.editor_font,
+                        {
+                            let vm = vm_font_ed_jb.clone();
+                            move || {
+                                vm.borrow_mut().dispatch(EditorCommand::SetEditorFont("JetBrains Mono".to_string()));
+                            }
+                        },
+                    ),
+                    font_choice_chip(
+                        "Cascadia Code",
+                        "Cascadia Code",
+                        signals.editor_font,
+                        {
+                            let vm = vm_font_ed_cascadia.clone();
+                            move || {
+                                vm.borrow_mut().dispatch(EditorCommand::SetEditorFont("Cascadia Code".to_string()));
+                            }
+                        },
+                    ),
+                    font_choice_chip(
+                        "Consolas",
+                        "Consolas",
+                        signals.editor_font,
+                        {
+                            let vm = vm_font_ed_consolas.clone();
+                            move || {
+                                vm.borrow_mut().dispatch(EditorCommand::SetEditorFont("Consolas".to_string()));
+                            }
+                        },
+                    ),
+                ))
+                .style(|s| s.width_full().margin_bottom(12.0)),
+
+                // Section 3: Terminal Font
+                label(|| "3. Terminal Font".to_string()).style(move |s| {
+                    s.font_size(12.5)
+                        .font_bold()
+                        .font_family(signals.ide_font.get())
+                        .color(Color::rgb8(229, 192, 123))
+                        .margin_bottom(6.0)
+                }),
+                h_stack((
+                    font_choice_chip(
+                        "JetBrains Mono",
+                        "JetBrains Mono",
+                        signals.terminal_font,
+                        {
+                            let vm = vm_font_term_jb.clone();
+                            move || {
+                                vm.borrow_mut().dispatch(EditorCommand::SetTerminalFont("JetBrains Mono".to_string()));
+                            }
+                        },
+                    ),
+                    font_choice_chip(
+                        "Cascadia Code",
+                        "Cascadia Code",
+                        signals.terminal_font,
+                        {
+                            let vm = vm_font_term_cascadia.clone();
+                            move || {
+                                vm.borrow_mut().dispatch(EditorCommand::SetTerminalFont("Cascadia Code".to_string()));
+                            }
+                        },
+                    ),
+                    font_choice_chip(
+                        "Consolas",
+                        "Consolas",
+                        signals.terminal_font,
+                        {
+                            let vm = vm_font_term_consolas.clone();
+                            move || {
+                                vm.borrow_mut().dispatch(EditorCommand::SetTerminalFont("Consolas".to_string()));
+                            }
+                        },
+                    ),
+                ))
+                .style(|s| s.width_full().margin_bottom(12.0)),
+
+                // Live Preview Box
+                v_stack((
+                    h_stack((
+                        label(|| "LIVE EDITOR PREVIEW".to_string()).style(|s| {
+                            s.font_size(10.5)
+                                .font_bold()
+                                .color(Color::rgb8(140, 148, 160))
+                        }),
+                        empty().style(|s| s.flex_grow(1.0)),
+                        label(move || {
+                            let f = signals.editor_font.get();
+                            if f == "JetBrains Mono" {
+                                "Active: JetBrains Mono"
+                            } else if f == "Cascadia Code" {
+                                "Active: Cascadia Code"
+                            } else {
+                                "Active: Consolas"
+                            }
+                        })
+                        .style(|s| s.font_size(11.0).color(Color::rgb8(229, 192, 123))),
+                    ))
+                    .style(|s| s.width_full().margin_bottom(6.0)),
+                    h_stack((
+                        label(|| "1  ".to_string()).style(move |s| {
+                            s.color(Color::rgb8(92, 99, 112))
+                                .font_size(13.0)
+                                .font_family(signals.editor_font.get())
+                        }),
+                        label(|| "def ".to_string()).style(move |s| {
+                            s.color(Color::rgb8(198, 120, 221))
+                                .font_size(13.0)
+                                .font_family(signals.editor_font.get())
+                        }),
+                        label(|| "compute_norm".to_string()).style(move |s| {
+                            s.color(Color::rgb8(97, 175, 239))
+                                .font_size(13.0)
+                                .font_family(signals.editor_font.get())
+                        }),
+                        label(|| "(scale: float = 1.0) -> float:".to_string()).style(move |s| {
+                            s.color(Color::rgb8(224, 108, 117))
+                                .font_size(13.0)
+                                .font_family(signals.editor_font.get())
+                        }),
+                    )),
+                    h_stack((
+                        label(|| "2  ".to_string()).style(move |s| {
+                            s.color(Color::rgb8(92, 99, 112))
+                                .font_size(13.0)
+                                .font_family(signals.editor_font.get())
+                        }),
+                        label(|| "    \"\"\"Calculates vector norm with high-speed Ruff AST.\"\"\"".to_string()).style(move |s| {
+                            s.color(Color::rgb8(152, 195, 121))
+                                .font_size(13.0)
+                                .font_family(signals.editor_font.get())
+                        }),
+                    )),
+                ))
+                .style(|s| {
+                    s.width_full()
+                        .padding(12.0)
+                        .background(Color::rgb8(20, 22, 28))
+                        .border_radius(6.0)
+                        .border(1.0)
+                        .border_color(Color::rgb8(42, 46, 58))
+                        .margin_bottom(16.0)
+                }),
+
+                // Footer Actions
+                h_stack((
+                    label(|| "Reset Defaults".to_string())
+                        .on_click_stop(move |_| {
+                            let mut m = vm_reset_btn.borrow_mut();
+                            m.dispatch(EditorCommand::SetIdeFont("Quicksand".to_string()));
+                            m.dispatch(EditorCommand::SetEditorFont("JetBrains Mono".to_string()));
+                            m.dispatch(EditorCommand::SetTerminalFont("JetBrains Mono".to_string()));
+                        })
+                        .style(move |s| {
+                            s.padding_horiz(14.0)
+                                .padding_vert(7.0)
+                                .font_size(12.0)
+                                .font_family(signals.ide_font.get())
+                                .color(Color::rgb8(180, 186, 200))
+                                .background(Color::rgb8(36, 40, 52))
+                                .border_radius(5.0)
+                                .cursor(CursorStyle::Pointer)
+                                .hover(|s| s.background(Color::rgb8(44, 50, 64)))
+                        }),
+                    empty().style(|s| s.flex_grow(1.0)),
+                    label(|| "Done".to_string())
+                        .on_click_stop(move |_| {
+                            vm_done_btn.borrow_mut().dispatch(EditorCommand::ToggleFontDialog);
+                        })
+                        .style(move |s| {
+                            s.padding_horiz(18.0)
+                                .padding_vert(7.0)
+                                .font_size(12.0)
+                                .font_bold()
+                                .font_family(signals.ide_font.get())
+                                .color(Color::WHITE)
+                                .background(Color::rgb8(97, 175, 239))
+                                .border_radius(5.0)
+                                .cursor(CursorStyle::Pointer)
+                                .hover(|s| s.background(Color::rgb8(78, 156, 220)))
+                        }),
+                ))
+                .style(|s| s.width_full().items_center()),
+            ))
+            .on_click_stop(|_| {})
+            .style(|s| {
+                s.width(560.0)
+                    .background(Color::rgb8(28, 32, 42))
+                    .border(1.0)
+                    .border_color(Color::rgb8(48, 54, 70))
+                    .border_radius(10.0)
+                    .padding(22.0)
+            }),
+        ))
+        .on_click_stop(move |_| {
+            vm_backdrop.borrow_mut().dispatch(EditorCommand::ToggleFontDialog);
+        })
+        .style(move |s| {
+            let is_open = signals.font_dialog_open.get();
+            s.absolute()
+                .size_full()
+                .inset_top(0.0)
+                .inset_left(0.0)
+                .z_index(500)
+                .justify_center()
+                .items_center()
+                .background(Color::rgba8(10, 12, 16, 220))
+                .apply_if(!is_open, |s| s.hide())
+        })
+    };
 
     v_stack((
         top_bar,
@@ -1175,6 +1694,9 @@ fn app_view(tokio_handle: TokioHandle) -> impl IntoView {
         bottom_search_panel,
         bottom_pytest_panel,
         status_bar,
+        file_dropdown,
+        settings_dropdown,
+        font_settings_dialog,
     ))
     .style(|s| s.width_full().height_full())
     .keyboard_navigable()
@@ -1201,6 +1723,10 @@ fn app_view(tokio_handle: TokioHandle) -> impl IntoView {
                     model.dispatch(EditorCommand::MoveCursor(MoveDirection::LineEnd));
                 }
                 Key::Named(NamedKey::Escape) => {
+                    if model.signals.font_dialog_open.get_untracked() {
+                        model.dispatch(EditorCommand::ToggleFontDialog);
+                    }
+                    model.dispatch(EditorCommand::CloseMenu);
                     model.dispatch(EditorCommand::CancelAiStream);
                     model.dispatch(EditorCommand::CancelPytestRun);
                 }
@@ -1226,6 +1752,14 @@ fn app_view(tokio_handle: TokioHandle) -> impl IntoView {
 
                     if is_shortcut {
                         match ch.as_str() {
+                            "n" | "N" => {
+                                model.dispatch(EditorCommand::NewDocument);
+                            }
+                            "o" | "O" => {
+                                if let Ok(cwd) = std::env::current_dir() {
+                                    model.dispatch(EditorCommand::OpenWorkspace(cwd));
+                                }
+                            }
                             "s" | "S" => {
                                 model.dispatch(EditorCommand::SaveActiveFile);
                             }
@@ -1250,6 +1784,9 @@ fn app_view(tokio_handle: TokioHandle) -> impl IntoView {
                                 model.dispatch(EditorCommand::Redo);
                                 model.dispatch(EditorCommand::RunEphemeralAnalysis);
                             }
+                            "," => {
+                                model.dispatch(EditorCommand::ToggleFontDialog);
+                            }
                             _ => {}
                         }
                     } else {
@@ -1264,6 +1801,8 @@ fn app_view(tokio_handle: TokioHandle) -> impl IntoView {
 }
 
 fn main() {
+    app_floem::bundled_fonts::ensure_bundled_fonts();
+
     let runtime = RuntimeBuilder::new_multi_thread()
         .worker_threads(2)
         .enable_all()

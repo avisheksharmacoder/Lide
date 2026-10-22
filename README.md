@@ -96,7 +96,7 @@ Poom/
 │   ├── lang-python/              # Tree-sitter highlighter, Astral Ruff parser & formatter
 │   ├── workspace-engine/         # File indexer, Ripgrep searcher, virtualenv detector, pytest runner
 │   ├── ai-engine/                # AST context pruning & Ollama streaming client
-│   └── app-floem/                # Floem native desktop GUI, virtual viewport & keybindings
+│   └── app-iced/                 # Iced native desktop GUI (The Elm Architecture), embedded fonts & keybindings
 └── target/                       # Build artifacts (git-ignored)
 ```
 
@@ -113,7 +113,7 @@ Poom/
 
 ### Run the Editor
 ```bash
-cargo run -p app-floem --release
+cargo run -p app-iced --release
 ```
 
 ### Run Test Suite

@@ -6,19 +6,20 @@ Welcome to the **`aidocs`** directory for **Lide Editor**. This folder is design
 
 ## 1. Executive Summary & Core Tenets
 
-Lide is a pure-Rust, single-binary desktop Python & polyglot IDE fronted by **Floem** (native GUI) and powered by embedded Rust engines (**Astral Ruff**, **Tree-sitter**, **Ripgrep**).
+Lide is a pure-Rust, single-binary desktop Python & polyglot IDE fronted by **Iced** (native GUI via The Elm Architecture) and powered by embedded Rust engines (**Astral Ruff**, **Tree-sitter**, **Ripgrep**).
 
 When working on this repository, you must preserve four foundational invariants:
 
 1. **Strict GUI Decoupling**:
-   - `crates/editor-core` has **zero** dependencies on Floem, Winit, GPU rendering, or OS windowing.
+   - `crates/editor-core` has **zero** dependencies on Iced, Winit, GPU rendering, or OS windowing.
    - Core text buffer mechanics (Rope, cursor physics, undo/redo trees, auto-indentation, viewport math) must run synchronously in standard `cargo test` harnesses without a window or GPU context.
-2. **Granular Signal Reactivity**:
-   - UI state is partitioned into isolated `RwSignal<T>` primitives in `crates/app-floem`.
-   - Never trigger monolithic full-screen redraws. Scrolling updates only viewport indices; typing updates the active row and cursor; test runs update the test panel; AI token streaming updates only the assistant view.
+2. **The Elm Architecture (TEA) & Deterministic Transitions**:
+   - UI state is unified into `LideApp` in `crates/app-iced`.
+   - All state mutations are strictly sequenced through deterministic commands in `update()`.
+   - Views are pure rendering functions (`view()`). Fonts are embedded in-memory via `include_bytes!` (`fonts.rs`), completely bypassing Windows GDI and registry font resolution failures.
 3. **Sub-Millisecond SLAs & Non-Blocking Async**:
-   - Never perform file I/O, regex searches, AST parsing, or formatting directly on Floem's UI main thread.
-   - Offload heavy tasks to background multi-threaded Tokio workers and marshal events back via `floem::ext_event::create_ext_action`.
+   - Never perform file I/O, regex searches, AST parsing, or formatting directly on Iced's UI main thread.
+   - Offload heavy tasks to background multi-threaded Tokio workers and marshal events back via native Iced `Task::stream` and `Subscription`.
 4. **Strict Test-Driven Development (TDD)**:
    - Always write tests first (Red -> Green -> Refactor) for any new command, parser, or signal handler.
    - All tests must pass in headless environments without display servers.
@@ -34,7 +35,7 @@ When working on this repository, you must preserve four foundational invariants:
 | **`lang-python`** | `crates/lang-python/` | Python intelligence: `tree-sitter-python` tokenization, embedded Astral Ruff AST parser (`ruff_python_parser`), ephemeral AST outline extractor, Astral Ruff formatter (`ruff_python_formatter`), and `.pyd`/`.so` stub resolver. |
 | **`workspace-engine`** | `crates/workspace-engine/` | Filesystem indexing (`ignore::WalkBuilder`), native Ripgrep regex searcher (`grep-searcher`), zero-subprocess virtualenv detector (`pyvenv.cfg`), and non-blocking `pytest` execution with `--tb=short` traceback parsing. |
 | **`ai-engine`** | `crates/ai-engine/` | AST-scoped prompt generator, mockable `LlmStreamingClient` trait, local Ollama streaming client (`ollama-rs`), real-time `mpsc` event streamer, and task cancellation handles. |
-| **`app-floem`** | `crates/app-floem/` | Floem desktop application shell: reactive `EditorViewModel`, `EditorSignals`, virtualized viewport rendering, split panels (Ripgrep, Pytest), AI pane, status bar, and keyboard shortcuts. |
+| **`app-iced`** | `crates/app-iced/` | Iced desktop application shell: Elm Architecture (`LideApp`, `EditorCommand`), virtualized viewport rendering, split panels (Ripgrep, Pytest), AI pane, status bar, and global keyboard shortcuts. |
 
 ---
 
@@ -76,8 +77,8 @@ cargo test -p workspace-engine
 # Verify AI prompt builder & Ollama client
 cargo test -p ai-engine
 
-# Verify Floem view model signals & Tokio bridge
-cargo test -p app-floem
+# Verify Iced TEA update commands, viewport & Tokio bridge
+cargo test -p app-iced
 ```
 
 ### Benchmarking
@@ -87,7 +88,7 @@ cargo bench -p editor-core
 
 ### Launching the Desktop Application
 ```bash
-cargo run -p app-floem --release
+cargo run -p app-iced --release
 ```
 
 ---
@@ -103,7 +104,7 @@ When adding support for a new language (e.g. Cython, C++, C, Rust, or Jupyter):
    - Implement `CodeFormatter` for format-on-save support.
 3. **Wire into View Model**:
    - Update file indexing in `crates/workspace-engine/src/lib.rs` to associate extensions with the new `LanguageId`.
-   - Update `EditorViewModel` in `crates/app-floem/src/lib.rs` to route analysis and highlighting to the language implementation.
+   - Update `LideApp` in `crates/app-iced/src/lib.rs` to route analysis and highlighting to the language implementation.
 4. **Maintain Pure Headless Unit Tests**: Write full test suites validating syntax highlighting tokens and outline extraction before touching UI components.
 
 ---

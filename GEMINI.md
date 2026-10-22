@@ -10,10 +10,10 @@ You are an expert systems & GUI engineer pair programming on **Lide**, an ultra-
    - `crates/editor-core` has no dependency on `floem`, `tokio`, or GPU graphics. It is a deterministic, synchronous engine.
    - All editing commands must be verifiable in headless `cargo test` harnesses without requiring X11/Wayland/Windows display servers.
 
-2. **Fine-Grained Reactive Signal Architecture**:
-   - In `crates/app-floem`, never trigger monolithic view redraws.
-   - Partition UI state into isolated Floem signals (`RwSignal<T>`).
-   - Typing only notifies the active line; scrolling only notifies visible line indices; AI streaming only notifies the assistant stream signal; Pytest runs only notify the test panel signals.
+2. **The Elm Architecture (TEA) & In-Memory Font Embedding**:
+   - In `crates/app-iced`, UI state is managed via strictly sequenced deterministic transitions in `update()` and pure widget rendering in `view()`.
+   - Typography uses zero-network in-memory TrueType embedding via `include_bytes!` and `fonts.rs`, bypassing OS registry scans and system font resolution issues.
+   - Background streaming (Ollama AI, Pytest, Ripgrep) uses native Tokio async tasks and Iced subscriptions.
 
 3. **Sub-Millisecond SLAs**:
    - **Cold Start**: < 50 ms.
@@ -36,7 +36,7 @@ You are an expert systems & GUI engineer pair programming on **Lide**, an ultra-
 Specialized workflow skills are available in `.agents/skills/` and `aidocs/skills/`:
 - **`lide-tdd`**: TDD test harness, mocking LLM/Pytest interfaces, and headless assertions.
 - **`lide-language-support`**: Checklist and contracts for adding Cython, C++, C, Jupyter, or Rust.
-- **`lide-floem-ui`**: Reactive signals, `create_ext_action` stream pump, and zero-redraw layouts.
+- **`lide-iced-ui`**: The Elm Architecture (TEA), widget layouts, in-memory font tokens, and native Tokio streaming tasks.
 
 ---
 
@@ -44,6 +44,6 @@ Specialized workflow skills are available in `.agents/skills/` and `aidocs/skill
 
 ```bash
 cargo test --workspace
-cargo test -p app-floem --test v1_step2_bridge_tdd
-cargo run -p app-floem --release
+cargo test -p app-iced --test v1_step2_bridge_tdd
+cargo run -p app-iced --release
 ```

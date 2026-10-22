@@ -21,11 +21,22 @@ use workspace_engine::{
     SearchMatch, VirtualenvDetector, WorkspaceFile, WorkspaceIndexer, WorkspaceSearcher,
 };
 
+pub mod bundled_fonts;
+
 /// Active view mode for the left sidebar panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SidebarTab {
     ProjectFiles,
     Structure,
+}
+
+/// Active floating dropdown menu in the top toolbar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum ActiveMenu {
+    #[default]
+    None,
+    File,
+    Settings,
 }
 
 /// A line-local colored text span ready for Floem text layout.
@@ -45,6 +56,8 @@ pub struct RenderedLine {
     pub gutter_number: usize,
     /// True if the primary cursor currently sits on this line.
     pub is_active_line: bool,
+    /// Column offset of the cursor if active on this line.
+    pub cursor_col: Option<usize>,
     /// Highest severity diagnostic on this line (Error > Warning > Info > Hint) for gutter badges.
     pub highest_diagnostic: Option<DiagnosticSeverity>,
     /// Line text stripped of trailing CR/LF.
@@ -144,6 +157,20 @@ pub enum EditorCommand {
     /// Formats the active buffer with Ruff (if valid Python), writes atomically to `active_file_path`,
     /// clears `is_dirty`, and refreshes the AST outline (`Ctrl+S` / `Cmd+S`).
     SaveActiveFile,
+    /// Toggles the specified top toolbar dropdown menu (`File` or `Settings`).
+    ToggleMenu(ActiveMenu),
+    /// Closes any open top toolbar dropdown menu.
+    CloseMenu,
+    /// Clears the active buffer for a new blank document.
+    NewDocument,
+    /// Opens or closes the Font Settings modal dialog.
+    ToggleFontDialog,
+    /// Sets the UI / IDE font family.
+    SetIdeFont(String),
+    /// Sets the Code Editor font family.
+    SetEditorFont(String),
+    /// Sets the Terminal font family.
+    SetTerminalFont(String),
 }
 
 /// Granular Floem reactive signals. Splitting these ensures scrolling, typing, or toggling
@@ -208,6 +235,16 @@ pub struct EditorSignals {
     pub pytest_summary: RwSignal<Option<String>>,
     /// True if the buffer has unsaved modifications since the last load or save.
     pub is_dirty: RwSignal<bool>,
+    /// Currently open dropdown menu in the top toolbar.
+    pub active_menu: RwSignal<ActiveMenu>,
+    /// Whether the Font Settings modal dialog is currently open.
+    pub font_dialog_open: RwSignal<bool>,
+    /// Currently selected IDE / UI font family.
+    pub ide_font: RwSignal<String>,
+    /// Currently selected Code Editor font family.
+    pub editor_font: RwSignal<String>,
+    /// Currently selected Terminal font family.
+    pub terminal_font: RwSignal<String>,
 }
 
 /// Headless controller that owns the Rope buffer, Tree-sitter highlighter, Ruff analyzer,
@@ -279,6 +316,11 @@ impl EditorViewModel {
             pytest_failures: scope.create_rw_signal(Vec::new()),
             pytest_summary: scope.create_rw_signal(None),
             is_dirty: scope.create_rw_signal(false),
+            active_menu: scope.create_rw_signal(ActiveMenu::None),
+            font_dialog_open: scope.create_rw_signal(false),
+            ide_font: scope.create_rw_signal("Quicksand".to_string()),
+            editor_font: scope.create_rw_signal("JetBrains Mono".to_string()),
+            terminal_font: scope.create_rw_signal("JetBrains Mono".to_string()),
         };
 
         let mut vm = Self {
@@ -696,6 +738,46 @@ impl EditorViewModel {
                 self.update_status_bar_signal();
                 self.refresh_visible_viewport();
             }
+
+            EditorCommand::ToggleMenu(menu) => {
+                let current = self.signals.active_menu.get_untracked();
+                if current == menu {
+                    self.signals.active_menu.set(ActiveMenu::None);
+                } else {
+                    self.signals.active_menu.set(menu);
+                }
+            }
+
+            EditorCommand::CloseMenu => {
+                self.signals.active_menu.set(ActiveMenu::None);
+            }
+
+            EditorCommand::NewDocument => {
+                self.load_buffer_text(String::new());
+                self.signals.active_file_path.set(None);
+                self.signals.is_dirty.set(false);
+                self.signals.active_menu.set(ActiveMenu::None);
+                self.run_ephemeral_analysis_internal();
+            }
+
+            EditorCommand::ToggleFontDialog => {
+                let current = self.signals.font_dialog_open.get_untracked();
+                self.signals.font_dialog_open.set(!current);
+                self.signals.active_menu.set(ActiveMenu::None);
+            }
+
+            EditorCommand::SetIdeFont(font) => {
+                self.signals.ide_font.set(font);
+            }
+
+            EditorCommand::SetEditorFont(font) => {
+                self.signals.editor_font.set(font);
+                self.refresh_visible_viewport();
+            }
+
+            EditorCommand::SetTerminalFont(font) => {
+                self.signals.terminal_font.set(font);
+            }
         }
     }
 
@@ -878,16 +960,19 @@ impl EditorViewModel {
             .highlight_viewport(&self.source_cache, vp_slice.byte_range.clone());
 
         let active_line = self.buffer.cursor().head.line;
+        let active_col = self.buffer.cursor().head.col;
         let mut rendered = Vec::with_capacity(vp_slice.lines.len());
 
         for vis_line in vp_slice.lines {
             let styled_segments = build_styled_segments(&vis_line, &spans);
             let highest_diagnostic = self.line_diagnostics.get(&vis_line.line_idx).copied();
+            let is_active = vis_line.line_idx == active_line;
 
             rendered.push(RenderedLine {
                 line_idx: vis_line.line_idx,
                 gutter_number: vis_line.line_idx + 1,
-                is_active_line: vis_line.line_idx == active_line,
+                is_active_line: is_active,
+                cursor_col: if is_active { Some(active_col) } else { None },
                 highest_diagnostic,
                 text: vis_line.text,
                 styled_segments,

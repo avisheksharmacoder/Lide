@@ -1,12 +1,13 @@
 [workspace]
 resolver = "2"
+default-members = ["crates/app-iced"]
 members = [
     "crates/editor-core",
     "crates/lang-contract",
     "crates/lang-python",
     "crates/workspace-engine",
     "crates/ai-engine",
-    "crates/app-floem",
+    "crates/app-iced",
 ]
 
 [workspace.package]
@@ -20,6 +21,8 @@ lang-contract = { path = "crates/lang-contract" }
 lang-python = { path = "crates/lang-python" }
 workspace-engine = { path = "crates/workspace-engine" }
 ai-engine = { path = "crates/ai-engine" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 
 tokio = { version = "1.40", features = [
     "rt",
@@ -53,8 +56,10 @@ ruff_python_ast = "0.0.15"
 ruff_text_size = "0.0.15"
 ruff_python_formatter = { git = "https://github.com/astral-sh/ruff", tag = "0.8.4" }
 
-# Floem GUI & Reactive Signals
+# GUI Frameworks
 floem = "0.2.0"
+iced = { version = "0.13", features = ["canvas", "image", "svg", "tokio"] }
+lucide-icons = { version = "1", features = ["iced"] }
 
 # Testing & Benchmarking
 proptest = "1.5.0"

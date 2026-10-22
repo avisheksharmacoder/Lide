@@ -1,0 +1,19 @@
+[package]
+name = "app-iced"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+editor-core.workspace = true
+lang-contract.workspace = true
+lang-python.workspace = true
+workspace-engine.workspace = true
+ai-engine.workspace = true
+iced.workspace = true
+tokio.workspace = true
+lucide-icons.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

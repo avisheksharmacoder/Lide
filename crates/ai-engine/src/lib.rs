@@ -251,6 +251,43 @@ impl OllamaStreamingClient {
             ollama: Ollama::builder().host(host.to_string()).port(port).build(),
         }
     }
+
+    /// Verifies connectivity to the configured Ollama server by querying its local model list.
+    pub async fn check_health(&self) -> Result<Vec<String>, String> {
+        match self.ollama.list_local_models().await {
+            Ok(models) => {
+                let names = models.into_iter().map(|m| m.name).collect();
+                Ok(names)
+            }
+            Err(e) => Err(format!("Cannot connect to Ollama: {e}")),
+        }
+    }
+}
+
+/// Parses an endpoint URL (e.g. `http://localhost:11434`, `http://192.168.1.50:11434`, `localhost:11434`)
+/// into standard `(host, port)` components for `OllamaStreamingClient`.
+pub fn parse_ollama_endpoint(endpoint: &str) -> (String, u16) {
+    let trimmed = endpoint.trim().trim_end_matches('/');
+    if trimmed.is_empty() {
+        return ("http://localhost".to_string(), 11434);
+    }
+
+    let (scheme, rest) = if let Some(stripped) = trimmed.strip_prefix("https://") {
+        ("https", stripped)
+    } else if let Some(stripped) = trimmed.strip_prefix("http://") {
+        ("http", stripped)
+    } else {
+        ("http", trimmed)
+    };
+
+    // Separate host and port if present
+    if let Some((host_part, port_str)) = rest.rsplit_once(':') {
+        if let Ok(port) = port_str.parse::<u16>() {
+            return (format!("{}://{}", scheme, host_part), port);
+        }
+    }
+
+    (format!("{}://{}", scheme, rest), 11434)
 }
 
 impl Default for OllamaStreamingClient {

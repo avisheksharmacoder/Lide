@@ -46,8 +46,8 @@ Poom/
 │   ├── lang-python/            # Tree-sitter + Ruff parser/linter/formatter
 │   ├── ai-engine/              # AST context extractor & mockable Ollama streaming
 │   ├── workspace-engine/       # File discovery, grep, virtualenv, notify watcher
-│   └── app-floem/              # Floem reactive GUI shell & layout bindings
-└── src/                        # Main entrypoint delegating to app-floem
+│   └── app-iced/               # Iced desktop GUI shell & TEA bindings
+└── src/                        # Main entrypoint delegating to app-iced
 ```
 
 ---
@@ -75,12 +75,12 @@ graph TD
     end
 
     subgraph "Presentation Layer"
-        AF["app-floem\n(Floem, cosmic-text, Taffy)"]
-        AF --> EC
-        AF --> LC
-        AF --> LP
-        AF --> WE
-        AF --> AI
+        AIced["app-iced\n(Iced TEA, Canvas, Embedded Fonts)"]
+        AIced --> EC
+        AIced --> LC
+        AIced --> LP
+        AIced --> WE
+        AIced --> AI
     end
 ```
 
@@ -97,19 +97,19 @@ To prevent multi-byte UTF-8 panics and off-by-one rendering errors, Poom enforce
 | `LineIndex(pub usize)` | 0-indexed buffer line number | 0 to `rope.len_lines() - 1`. |
 | `ColumnIndex(pub usize)` | 0-indexed grapheme cluster offset within a line | Grapheme-cluster aware for multi-byte/emoji cursor movement. |
 | `Utf16CodeUnitOffset(pub usize)` | UTF-16 code unit offset | LSP compatibility mapping for external language servers. |
-| `PixelPoint { x: f64, y: f64 }` | Visual coordinate relative to editor canvas | Handled strictly in `app-floem`. |
+| `PixelPoint { x: f64, y: f64 }` | Visual coordinate relative to editor canvas | Handled strictly in `app-iced`. |
 
 ---
 
 ## 5. Threading & Reactivity Model
 
 - **Main / GUI Thread**:
-  - Runs Floem's event loop and renders via WGPU (or tiny-skia CPU fallback).
-  - Owns granular `RwSignal` primitives (`active_buffer_rev`, `cursor_pos`, `diagnostics`, `ai_stream_chunk`).
-  - Dispatches serializable `EditorCommand` events to `editor-core`.
-- **Background Async Tokio Pool**:
+  - Runs Iced event loop and executes pure-function rendering via `view()`.
+  - Dispatches serializable `EditorCommand` events through `update(&mut self, message)`.
+  - In-memory embedded TrueType fonts (`fonts.rs`) bypass OS registry scans and system font resolution issues completely.
+- **Background Async Tokio Pool & Subscriptions**:
   - Offloads heavy IO: file loading, regex search (`workspace-engine`), Ruff AST parsing & linting (`lang-python`), and Ollama streaming (`ai-engine`).
-  - Sends immutable snapshots/results to the main thread via crossbeam channels or Floem event dispatches (`ExtEventSink`), which update reactive signals without blocking frames.
+  - Emits streaming items back to `update()` via native Iced `Task::stream` and `Subscription`.
 
 ---
 

@@ -505,7 +505,7 @@ impl TextBuffer {
     }
 
     /// Returns the number of extended Unicode grapheme clusters on `line_idx` (excluding CR/LF).
-    fn line_grapheme_len(&self, line_idx: usize) -> usize {
+    pub fn line_grapheme_len(&self, line_idx: usize) -> usize {
         let slice = self.rope.line(line_idx);
         let cow = slice_to_cow(slice);
         strip_line_ending(&cow).graphemes(true).count()

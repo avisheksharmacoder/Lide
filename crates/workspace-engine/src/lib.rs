@@ -22,8 +22,127 @@ pub struct WorkspaceFile {
     pub path: PathBuf,
     /// Path relative to the workspace root for compact sidebar display.
     pub relative_path: PathBuf,
+    /// Alias for backwards compatibility with tests expecting `rel_path`.
+    pub rel_path: PathBuf,
     /// Detected language (Python, Cython, PydBinaryStub, C, Cpp, Rust).
     pub language: Option<LanguageId>,
+}
+
+/// A node in the hierarchical workspace tree (folder or file).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceTreeNode {
+    /// Absolute path on disk.
+    pub path: PathBuf,
+    /// Path relative to the workspace root.
+    pub relative_path: PathBuf,
+    /// File or directory name for UI display.
+    pub name: String,
+    /// True if directory, false if file.
+    pub is_dir: bool,
+    /// Detected language (None for directories or unclassified files).
+    pub language: Option<LanguageId>,
+    /// Nested child items (deterministically sorted: directories first, then files).
+    pub children: Vec<WorkspaceTreeNode>,
+}
+
+/// A flattened visible row from the workspace tree, ready for Iced column rendering.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FlatTreeItem {
+    /// Absolute path on disk.
+    pub path: PathBuf,
+    /// Path relative to the workspace root.
+    pub relative_path: PathBuf,
+    /// File or directory name for display.
+    pub name: String,
+    /// True if directory, false if file.
+    pub is_dir: bool,
+    /// Nesting depth (0 for top-level children, 1 for children of expanded folders, etc.).
+    /// Used directly to calculate the 10px indentation padding: `depth * 10`.
+    pub depth: usize,
+    /// True if this directory is currently expanded.
+    pub is_expanded: bool,
+    /// Detected language.
+    pub language: Option<LanguageId>,
+}
+
+impl WorkspaceTreeNode {
+    pub fn new_dir(path: PathBuf, relative_path: PathBuf, name: String) -> Self {
+        Self {
+            path,
+            relative_path,
+            name,
+            is_dir: true,
+            language: None,
+            children: Vec::new(),
+        }
+    }
+
+    pub fn new_file(
+        path: PathBuf,
+        relative_path: PathBuf,
+        name: String,
+        language: Option<LanguageId>,
+    ) -> Self {
+        Self {
+            path,
+            relative_path,
+            name,
+            is_dir: false,
+            language,
+            children: Vec::new(),
+        }
+    }
+
+    /// Recursively sorts all children: directories first (alphabetical), then files (alphabetical).
+    pub fn sort_recursive(&mut self) {
+        self.children.sort_by(|a, b| {
+            match (a.is_dir, b.is_dir) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+            }
+        });
+        for child in &mut self.children {
+            if child.is_dir {
+                child.sort_recursive();
+            }
+        }
+    }
+
+    /// Flattens this tree into a linear list of visible items based on currently expanded directory paths.
+    /// Indentation depth corresponds to levels of nesting (0, 1, 2, ...).
+    pub fn flatten_visible(
+        &self,
+        expanded_dirs: &std::collections::HashSet<PathBuf>,
+    ) -> Vec<FlatTreeItem> {
+        let mut items = Vec::new();
+        self.flatten_visible_internal(expanded_dirs, 0, &mut items);
+        items
+    }
+
+    fn flatten_visible_internal(
+        &self,
+        expanded_dirs: &std::collections::HashSet<PathBuf>,
+        depth: usize,
+        out: &mut Vec<FlatTreeItem>,
+    ) {
+        for child in &self.children {
+            let is_expanded = child.is_dir && expanded_dirs.contains(&child.path);
+            out.push(FlatTreeItem {
+                path: child.path.clone(),
+                relative_path: child.relative_path.clone(),
+                name: child.name.clone(),
+                is_dir: child.is_dir,
+                depth,
+                is_expanded,
+                language: child.language,
+            });
+
+            if is_expanded {
+                child.flatten_visible_internal(expanded_dirs, depth + 1, out);
+            }
+        }
+    }
 }
 
 /// A single regex search hit produced by `grep-searcher`.
@@ -94,6 +213,7 @@ impl WorkspaceIndexer {
 
             files.push(WorkspaceFile {
                 path,
+                rel_path: relative_path.clone(),
                 relative_path,
                 language,
             });
@@ -117,6 +237,93 @@ impl WorkspaceIndexer {
 
         let resolver = PydStubResolver::new();
         resolver.resolve_binary_module(binary_path, &siblings)
+    }
+
+    /// Recursively indexes the workspace into a `WorkspaceTreeNode` hierarchy respecting `.gitignore`
+    /// and pruning development artifacts (`.git`, `.venv`, `__pycache__`, `target`, etc.).
+    pub fn index_tree(&self, root: &Path) -> WorkspaceTreeNode {
+        let root_name = root
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("workspace")
+            .to_string();
+
+        let mut root_node = WorkspaceTreeNode::new_dir(
+            root.to_path_buf(),
+            PathBuf::new(),
+            root_name,
+        );
+
+        let walker = build_filtered_walker(root);
+        for result in walker {
+            let Ok(entry) = result else {
+                continue;
+            };
+
+            if entry.depth() == 0 {
+                continue;
+            }
+
+            let path = entry.into_path();
+            let Ok(rel) = path.strip_prefix(root) else {
+                continue;
+            };
+
+            let is_dir = path.is_dir();
+            let components: Vec<std::ffi::OsString> = rel.iter().map(|c| c.to_os_string()).collect();
+            if components.is_empty() {
+                continue;
+            }
+
+            let mut curr = &mut root_node;
+            let mut current_rel = PathBuf::new();
+            let mut current_abs = root.to_path_buf();
+
+            for (idx, comp) in components.iter().enumerate() {
+                let is_last = idx == components.len() - 1;
+                let name = comp.to_string_lossy().to_string();
+                current_rel.push(comp);
+                current_abs.push(comp);
+
+                if is_last {
+                    if is_dir {
+                        if !curr.children.iter().any(|c| c.name == name && c.is_dir) {
+                            curr.children.push(WorkspaceTreeNode::new_dir(
+                                current_abs.clone(),
+                                current_rel.clone(),
+                                name,
+                            ));
+                        }
+                    } else {
+                        let lang = classify_file_language(&current_abs);
+                        if !curr.children.iter().any(|c| c.name == name && !c.is_dir) {
+                            curr.children.push(WorkspaceTreeNode::new_file(
+                                current_abs.clone(),
+                                current_rel.clone(),
+                                name,
+                                lang,
+                            ));
+                        }
+                    }
+                } else {
+                    let pos = match curr.children.iter().position(|c| c.name == name && c.is_dir) {
+                        Some(p) => p,
+                        None => {
+                            curr.children.push(WorkspaceTreeNode::new_dir(
+                                current_abs.clone(),
+                                current_rel.clone(),
+                                name,
+                            ));
+                            curr.children.len() - 1
+                        }
+                    };
+                    curr = &mut curr.children[pos];
+                }
+            }
+        }
+
+        root_node.sort_recursive();
+        root_node
     }
 }
 
@@ -729,4 +936,286 @@ impl PytestExecutor for ProcessPytestExecutor {
             let _ = child.wait().await;
         });
     }
+}
+
+// ============================================================================
+// FILE & FOLDER OPERATIONS (HEADLESS & SAFE)
+// ============================================================================
+
+/// Creates a new empty file inside `parent_dir` with the given `file_name`.
+/// Returns an error if `file_name` contains invalid path separators or if the file already exists.
+pub fn create_file(parent_dir: &Path, file_name: &str) -> std::io::Result<PathBuf> {
+    let trimmed = file_name.trim();
+    if trimmed.is_empty()
+        || trimmed.contains('/')
+        || trimmed.contains('\\')
+        || trimmed == "."
+        || trimmed == ".."
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Invalid file name",
+        ));
+    }
+
+    let target = parent_dir.join(trimmed);
+    if target.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            format!("File already exists: {}", target.display()),
+        ));
+    }
+
+    fs::File::create(&target)?;
+    Ok(target)
+}
+
+/// Creates a new directory inside `parent_dir` with the given `folder_name`.
+/// Returns an error if `folder_name` contains invalid characters or already exists.
+pub fn create_folder(parent_dir: &Path, folder_name: &str) -> std::io::Result<PathBuf> {
+    let trimmed = folder_name.trim();
+    if trimmed.is_empty()
+        || trimmed.contains('/')
+        || trimmed.contains('\\')
+        || trimmed == "."
+        || trimmed == ".."
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Invalid folder name",
+        ));
+    }
+
+    let target = parent_dir.join(trimmed);
+    if target.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            format!("Directory already exists: {}", target.display()),
+        ));
+    }
+
+    fs::create_dir_all(&target)?;
+    Ok(target)
+}
+
+/// Deletes a file or directory at `path` from disk.
+pub fn delete_entry(path: &Path) -> std::io::Result<()> {
+    if !path.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("Entry does not exist: {}", path.display()),
+        ));
+    }
+
+    if path.is_dir() {
+        fs::remove_dir_all(path)
+    } else {
+        fs::remove_file(path)
+    }
+}
+
+/// Builds the system file explorer command specification for revealing `path` in the OS file manager.
+/// Pure and mockable for headless TDD verification.
+pub fn build_explorer_command(path: &Path) -> (String, Vec<String>) {
+    #[cfg(windows)]
+    {
+        if path.is_file() {
+            (
+                "explorer".to_string(),
+                vec![format!("/select,{}", path.display())],
+            )
+        } else {
+            (
+                "explorer".to_string(),
+                vec![path.to_string_lossy().to_string()],
+            )
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        if path.is_file() {
+            (
+                "open".to_string(),
+                vec!["-R".to_string(), path.to_string_lossy().to_string()],
+            )
+        } else {
+            ("open".to_string(), vec![path.to_string_lossy().to_string()])
+        }
+    }
+
+    #[cfg(not(any(windows, target_os = "macos")))]
+    {
+        let target = if path.is_file() {
+            path.parent().unwrap_or(path)
+        } else {
+            path
+        };
+        (
+            "xdg-open".to_string(),
+            vec![target.to_string_lossy().to_string()],
+        )
+    }
+}
+
+/// Spawns the native OS file explorer pointing to `path`.
+pub fn reveal_in_system_explorer(path: &Path) -> std::io::Result<()> {
+    let (prog, args) = build_explorer_command(path);
+    std::process::Command::new(prog)
+        .args(&args)
+        .spawn()?;
+    Ok(())
+}
+
+/// Builds the system command specification to open the native OS folder picker dialog.
+/// Pure and mockable for headless TDD verification.
+pub fn build_folder_picker_command() -> (String, Vec<String>) {
+    #[cfg(windows)]
+    {
+        let script = concat!(
+            "Add-Type -AssemblyName System.Windows.Forms; ",
+            "$d = New-Object System.Windows.Forms.FolderBrowserDialog; ",
+            "$d.Description = 'Select Project Folder for Lide'; ",
+            "$top = New-Object System.Windows.Forms.Form -Property @{TopMost=$true}; ",
+            "if ($d.ShowDialog($top) -eq [System.Windows.Forms.DialogResult]::OK) { ",
+            "  [Console]::Out.Write($d.SelectedPath) ",
+            "}"
+        );
+        (
+            "powershell".to_string(),
+            vec![
+                "-NoProfile".to_string(),
+                "-NonInteractive".to_string(),
+                "-ExecutionPolicy".to_string(),
+                "Bypass".to_string(),
+                "-Sta".to_string(),
+                "-Command".to_string(),
+                script.to_string(),
+            ],
+        )
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        (
+            "osascript".to_string(),
+            vec![
+                "-e".to_string(),
+                "POSIX path of (choose folder with prompt \"Select Project Folder for Lide\")".to_string(),
+            ],
+        )
+    }
+
+    #[cfg(not(any(windows, target_os = "macos")))]
+    {
+        (
+            "zenity".to_string(),
+            vec![
+                "--file-selection".to_string(),
+                "--directory".to_string(),
+                "--title=Select Project Folder for Lide".to_string(),
+            ],
+        )
+    }
+}
+
+/// Spawns the native OS folder picker dialog and waits synchronously for the user's selection.
+/// Intended to be run in a background worker via `tokio::task::spawn_blocking`.
+pub fn spawn_native_folder_picker() -> Option<PathBuf> {
+    let (prog, args) = build_folder_picker_command();
+
+    #[cfg(windows)]
+    let prog_to_run = {
+        if let Ok(sys_root) = std::env::var("SystemRoot") {
+            let ps_full = PathBuf::from(&sys_root)
+                .join("System32")
+                .join("WindowsPowerShell")
+                .join("v1.0")
+                .join("powershell.exe");
+            if ps_full.exists() {
+                ps_full.to_string_lossy().to_string()
+            } else {
+                prog.clone()
+            }
+        } else {
+            prog.clone()
+        }
+    };
+
+    #[cfg(not(windows))]
+    let prog_to_run = prog;
+
+    let mut cmd = std::process::Command::new(&prog_to_run);
+    cmd.args(&args);
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    if let Ok(output) = cmd.output() {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !stdout.is_empty() {
+                let path = PathBuf::from(stdout);
+                if path.is_dir() {
+                    return Some(path);
+                }
+            }
+        }
+    }
+
+    // Windows Fallback: Try VBScript Shell.Application if PowerShell was blocked or failed
+    #[cfg(windows)]
+    {
+        if let Some(path) = spawn_vbscript_folder_picker() {
+            return Some(path);
+        }
+    }
+
+    None
+}
+
+#[cfg(windows)]
+fn spawn_vbscript_folder_picker() -> Option<PathBuf> {
+    let script = concat!(
+        "Set a = CreateObject(\"Shell.Application\")\r\n",
+        "Set f = a.BrowseForFolder(0, \"Select Project Folder for Lide\", 0, 0)\r\n",
+        "If Not f Is Nothing Then WScript.StdOut.Write f.Self.Path\r\n"
+    );
+    let temp_vbs = std::env::temp_dir().join("lide_folder_picker.vbs");
+    if std::fs::write(&temp_vbs, script).is_err() {
+        return None;
+    }
+
+    let cscript_path = if let Ok(sys_root) = std::env::var("SystemRoot") {
+        PathBuf::from(sys_root).join("System32").join("cscript.exe")
+    } else {
+        PathBuf::from("cscript.exe")
+    };
+
+    let mut cmd = std::process::Command::new(cscript_path);
+    cmd.arg("//nologo").arg(&temp_vbs);
+
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let output = cmd.output().ok();
+    let _ = std::fs::remove_file(temp_vbs);
+
+    if let Some(out) = output {
+        if out.status.success() {
+            let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if !stdout.is_empty() {
+                let path = PathBuf::from(stdout);
+                if path.is_dir() {
+                    return Some(path);
+                }
+            }
+        }
+    }
+    None
 }
