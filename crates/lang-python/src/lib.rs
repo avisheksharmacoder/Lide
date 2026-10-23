@@ -177,6 +177,33 @@ fn classify_atomic_node(kind: &str) -> Option<HighlightToken> {
 fn classify_leaf_node(node: Node<'_>, kind: &str) -> Option<HighlightToken> {
     if kind == "identifier" {
         if let Some(parent) = node.parent() {
+            // Check if this identifier is part of the decorator path/name (e.g. @app.get)
+            let mut curr = parent;
+            let mut in_decorator = false;
+            let mut in_arg_list = false;
+            loop {
+                if curr.kind() == "argument_list" {
+                    in_arg_list = true;
+                }
+                if curr.kind() == "decorator" {
+                    in_decorator = true;
+                    break;
+                }
+                if curr.kind().ends_with("_statement")
+                    || curr.kind() == "block"
+                    || curr.kind() == "module"
+                {
+                    break;
+                }
+                match curr.parent() {
+                    Some(p) => curr = p,
+                    None => break,
+                }
+            }
+            if in_decorator && !in_arg_list {
+                return Some(HighlightToken::Decorator);
+            }
+
             match parent.kind() {
                 "class_definition" => {
                     if parent.child_by_field_name("name") == Some(node) {
@@ -212,6 +239,22 @@ fn classify_leaf_node(node: Node<'_>, kind: &str) -> Option<HighlightToken> {
             | "not" | "and" | "or" | "match" | "case" | "global" | "nonlocal" | "assert"
             | "del" => Some(HighlightToken::Keyword),
             "@" => Some(HighlightToken::Decorator),
+            "." => {
+                let mut curr = node.parent();
+                while let Some(p) = curr {
+                    if p.kind() == "argument_list" {
+                        break;
+                    }
+                    if p.kind() == "decorator" {
+                        return Some(HighlightToken::Decorator);
+                    }
+                    if p.kind().ends_with("_statement") || p.kind() == "block" || p.kind() == "module" {
+                        break;
+                    }
+                    curr = p.parent();
+                }
+                None
+            }
             "=" | "+" | "-" | "*" | "/" | "//" | "%" | "**" | "->" | "==" | "!=" | "<" | "<="
             | ">" | ">=" | "+=" | "-=" | "*=" | "/=" => Some(HighlightToken::Operator),
             _ => None,

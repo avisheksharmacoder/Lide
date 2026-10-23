@@ -1349,12 +1349,17 @@ impl LideApp {
                         if !self.active_theme_name.contains("Dark")
                             && !self.active_theme_name.contains("Nord")
                             && !self.active_theme_name.contains("Dracula")
+                            && !self.active_theme_name.contains("Lide Original")
+                            && !self.active_theme_name.contains("Cerebral")
                         {
                             self.active_theme_name = "One Dark".to_string();
                         }
                     }
                     ThemeMode::Light => {
-                        if !self.active_theme_name.contains("Light") {
+                        if !self.active_theme_name.contains("Light")
+                            && !self.active_theme_name.contains("Lide Original")
+                            && !self.active_theme_name.contains("Cerebral")
+                        {
                             self.active_theme_name = "One Light".to_string();
                         }
                     }

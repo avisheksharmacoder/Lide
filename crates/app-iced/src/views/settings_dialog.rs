@@ -858,8 +858,8 @@ fn render_theme_detail(app: &LideApp) -> Element<'_, EditorCommand> {
     let mode_toggle_row = row![dark_mode_btn, light_mode_btn].spacing(10);
 
     // 2. Select Theme list according to active mode
-    let dark_themes = ["One Dark", "Dracula", "Nord", "GitHub Dark"];
-    let light_themes = ["One Light", "GitHub Light", "Solarized Light", "Quiet Light"];
+    let dark_themes = ["Lide Original v1", "One Dark", "Dracula", "Nord", "GitHub Dark"];
+    let light_themes = ["Lide Original v1", "One Light", "GitHub Light", "Solarized Light", "Quiet Light"];
 
     let current_themes = if is_dark { dark_themes.as_slice() } else { light_themes.as_slice() };
 

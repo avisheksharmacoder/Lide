@@ -358,16 +358,100 @@ impl ThemePalette {
         }
     }
 
+    /// Lide Original v1 Dark (Cerebral Night)
+    pub fn lide_original_dark() -> Self {
+        Self {
+            name: "Lide Original v1".to_string(),
+            mode: ThemeMode::Dark,
+            bg_app: Color::from_rgb8(0x13, 0x14, 0x19),
+            bg_editor: Color::from_rgb8(0x16, 0x18, 0x1D),
+            bg_sidebar: Color::from_rgb8(0x16, 0x18, 0x1D),
+            bg_toolbar: Color::from_rgb8(0x1A, 0x1D, 0x24),
+            bg_status_bar: Color::from_rgb8(0x11, 0x13, 0x17),
+            bg_panel: Color::from_rgb8(0x16, 0x18, 0x1D),
+            bg_active_row: Color::from_rgb8(0x1D, 0x20, 0x27),
+            bg_card: Color::from_rgb8(0x1E, 0x22, 0x2B),
+            bg_hover: Color::from_rgb8(0x29, 0x33, 0x45),
+            border_subtle: Color::from_rgb8(0x28, 0x2E, 0x3B),
+            border_focused: Color::from_rgb8(0xA3, 0x8C, 0xEB),
+            text_primary: Color::from_rgb8(0xD4, 0xD9, 0xE2),
+            text_muted: Color::from_rgb8(0x87, 0x92, 0xA3),
+            text_accent: Color::from_rgb8(0xA3, 0x8C, 0xEB),
+            syntax_keyword: Color::from_rgb8(0xA3, 0x8C, 0xEB),
+            syntax_function: Color::from_rgb8(0xE9, 0xB1, 0x6E),
+            syntax_class: Color::from_rgb8(0xDF, 0x7C, 0x90),
+            syntax_decorator: Color::from_rgb8(0xF5, 0xC5, 0x42),
+            syntax_string: Color::from_rgb8(0x89, 0xC7, 0x83),
+            syntax_number: Color::from_rgb8(0x59, 0xB1, 0xD5),
+            syntax_comment: Color::from_rgb8(0x6C, 0x76, 0x87),
+            syntax_operator: Color::from_rgb8(0x87, 0x92, 0xA3),
+            syntax_parameter: Color::from_rgb8(0xD1, 0x84, 0x5C),
+            syntax_builtin: Color::from_rgb8(0xB1, 0x9D, 0xF0),
+            badge_error: Color::from_rgb8(0xDF, 0x7C, 0x90),
+            badge_warning: Color::from_rgb8(0xF5, 0xC5, 0x42),
+            badge_info: Color::from_rgb8(0x59, 0xB1, 0xD5),
+            badge_success: Color::from_rgb8(0x89, 0xC7, 0x83),
+        }
+    }
+
+    /// Alias for `lide_original_dark` using specification name Cerebral Night.
+    pub fn cerebral_night() -> Self {
+        Self::lide_original_dark()
+    }
+
+    /// Lide Original v1 Light (Cerebral Day)
+    pub fn lide_original_light() -> Self {
+        Self {
+            name: "Lide Original v1".to_string(),
+            mode: ThemeMode::Light,
+            bg_app: Color::from_rgb8(0xF0, 0xF2, 0xF7),
+            bg_editor: Color::from_rgb8(0xF9, 0xFA, 0xFC),
+            bg_sidebar: Color::from_rgb8(0xF5, 0xF6, 0xFA),
+            bg_toolbar: Color::from_rgb8(0xEB, 0xEE, 0xF4),
+            bg_status_bar: Color::from_rgb8(0xE4, 0xE7, 0xEF),
+            bg_panel: Color::from_rgb8(0xF9, 0xFA, 0xFC),
+            bg_active_row: Color::from_rgb8(0xED, 0xF0, 0xF5),
+            bg_card: Color::from_rgb8(0xFF, 0xFF, 0xFF),
+            bg_hover: Color::from_rgb8(0xDE, 0xE5, 0xF0),
+            border_subtle: Color::from_rgb8(0xD1, 0xD6, 0xDF),
+            border_focused: Color::from_rgb8(0x6D, 0x4B, 0xD6),
+            text_primary: Color::from_rgb8(0x36, 0x3C, 0x49),
+            text_muted: Color::from_rgb8(0x7A, 0x84, 0x96),
+            text_accent: Color::from_rgb8(0x6D, 0x4B, 0xD6),
+            syntax_keyword: Color::from_rgb8(0x6D, 0x4B, 0xD6),
+            syntax_function: Color::from_rgb8(0xC9, 0x74, 0x1F),
+            syntax_class: Color::from_rgb8(0xB7, 0x3C, 0x56),
+            syntax_decorator: Color::from_rgb8(0xC6, 0x85, 0x12),
+            syntax_string: Color::from_rgb8(0x3C, 0x8B, 0x36),
+            syntax_number: Color::from_rgb8(0x1C, 0x73, 0xA1),
+            syntax_comment: Color::from_rgb8(0x8A, 0x94, 0xA6),
+            syntax_operator: Color::from_rgb8(0x7A, 0x84, 0x96),
+            syntax_parameter: Color::from_rgb8(0xB3, 0x56, 0x26),
+            syntax_builtin: Color::from_rgb8(0x81, 0x65, 0xE0),
+            badge_error: Color::from_rgb8(0xB7, 0x3C, 0x56),
+            badge_warning: Color::from_rgb8(0xC6, 0x85, 0x12),
+            badge_info: Color::from_rgb8(0x1C, 0x73, 0xA1),
+            badge_success: Color::from_rgb8(0x3C, 0x8B, 0x36),
+        }
+    }
+
+    /// Alias for `lide_original_light` using specification name Cerebral Day.
+    pub fn cerebral_day() -> Self {
+        Self::lide_original_light()
+    }
+
     /// Resolves a palette by name and mode. Falls back to default mode palette if name is unrecognized.
     pub fn resolve(theme_name: &str, mode: ThemeMode) -> Self {
         match mode {
             ThemeMode::Dark => match theme_name {
+                "Lide Original v1" | "Cerebral Night" => Self::lide_original_dark(),
                 "Dracula" | "Dracula Dark" => Self::dracula(),
                 "Nord" | "Nord Deep" => Self::nord(),
                 "GitHub Dark" => Self::github_dark(),
                 _ => Self::one_dark(),
             },
             ThemeMode::Light => match theme_name {
+                "Lide Original v1" | "Cerebral Day" => Self::lide_original_light(),
                 "GitHub Light" => Self::github_light(),
                 "Solarized Light" => Self::solarized_light(),
                 "Quiet Light" => Self::quiet_light(),

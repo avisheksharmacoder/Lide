@@ -10,20 +10,20 @@ A lightweight, memory-lean, single-binary Python & polyglot IDE written in 100% 
 
 ## Visual Tour
 
-### 1. Modern Code Editor & Workspace
-High-performance virtualized editor viewport with syntax highlighting, gutter diagnostics, breadcrumb navigation, and interactive project file tree.
+### 1. Lide Original v1 — Dark Mode (Cerebral Night)
+High-performance virtualized editor viewport with anti-fatigue deep slate canvas, warm apricot function anchors, cool amethyst control flow, and radiant gold decorators.
 
-![Lide Code Editor](images/code_editor.png)
+![Lide Original v1 Dark Mode](images/Lide_original_dark_v1.png)
 
-### 2. Live Font & Theme Customization
-Embedded in-memory typography (JetBrains Mono, Fira Code, Source Code Pro, Hack) and real-time theme customization without OS font registry dependencies.
+### 2. Lide Original v1 — Light Mode (Cerebral Day)
+Soft, tinted background engineered to prevent pupil strain during daytime development while maintaining clean semantic separation across strings, numbers, and types.
 
-![Font & Theme Settings Dialog](images/font_settings.png)
+![Lide Original v1 Light Mode](images/Lide_original_light_v1.png)
 
-### 3. Local-First AI Assistant
-AST-scoped prompt slicing connected directly to local Ollama models (`qwen2.5-coder`, `deepseek-coder`, `llama3`) for private code completions, docstrings, and refactoring.
+### 3. Local-First AI Assistant & Open Models
+AST-scoped prompt slicing connected directly to local Ollama open models (`qwen2.5-coder`, `deepseek-coder`, `llama3`, `codellama`, etc.) for private code completions, docstrings, and refactoring with zero cloud telemetry.
 
-![Local Coding Models & AI Pane](images/local_coding_models.png)
+![Lide Open Models & AI Assistant](images/Lide_open_models.png)
 
 ---
 
@@ -96,7 +96,7 @@ Lide was engineered as a single-binary, native alternative:
 - **Connection Health Telemetry:** Live status indicator dot in the bottom bar (Green = Connected, Yellow = Checking, Red = Error, Gray = Disconnected).
 
 ### 6. Dynamic Theme Engine & Settings Dialog
-- **8 Curated Open-Source Themes:** Dark mode (*One Dark*, *Dracula*, *Nord*, *GitHub Dark*) and Light mode (*One Light*, *GitHub Light*, *Solarized Light*, *Quiet Light*).
+- **Curated Themes & Lide Original v1:** Includes signature **Lide Original v1** (*Cerebral Night* / *Cerebral Day*), plus canonical open-source palettes for Dark mode (*One Dark*, *Dracula*, *Nord*, *GitHub Dark*) and Light mode (*One Light*, *GitHub Light*, *Solarized Light*, *Quiet Light*).
 - **Interactive Settings Dialog (`Ctrl+,`):**
   - Switch active editor font family (JetBrains Mono, Fira Code, Source Code Pro, Hack).
   - Adjust editor font size and line height sliders with live preview.

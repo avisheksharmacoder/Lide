@@ -284,3 +284,39 @@ fn test_pyd_binary_stub_interceptor_priority_chain() {
         other => panic!("Expected SynthesizedStub, got {:?}", other),
     }
 }
+
+#[test]
+fn test_decorator_expression_highlighting() {
+    let source = "@app.get(\"/health\")\ndef health():\n    return {\"status\": \"ok\"}\n";
+    let mut highlighter = PythonSyntaxHighlighter::new();
+    highlighter.parse_full(source);
+
+    let spans = highlighter.highlight_viewport(source, 0..source.len());
+
+    // Spans covering "@app.get" must be Token::Decorator
+    let decorator_spans: Vec<_> = spans
+        .iter()
+        .filter(|s| s.token == HighlightToken::Decorator)
+        .collect();
+
+    assert!(
+        !decorator_spans.is_empty(),
+        "Expected decorator spans for @app.get"
+    );
+
+    // Verify "@", "app", and "get" are marked as Decorator
+    let app_span = spans.iter().find(|s| &source[s.byte_range.clone()] == "app");
+    assert!(app_span.is_some(), "Expected span for 'app'");
+    assert_eq!(app_span.unwrap().token, HighlightToken::Decorator);
+
+    let get_span = spans.iter().find(|s| &source[s.byte_range.clone()] == "get");
+    assert!(get_span.is_some(), "Expected span for 'get'");
+    assert_eq!(get_span.unwrap().token, HighlightToken::Decorator);
+
+    // String "/health" must remain String token
+    let str_span = spans
+        .iter()
+        .find(|s| &source[s.byte_range.clone()] == "\"/health\"");
+    assert!(str_span.is_some(), "Expected span for \"/health\"");
+    assert_eq!(str_span.unwrap().token, HighlightToken::String);
+}
