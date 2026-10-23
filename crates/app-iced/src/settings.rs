@@ -34,7 +34,7 @@ pub struct LideSettings {
 impl Default for LideSettings {
     fn default() -> Self {
         Self {
-            theme_name: "One Dark Pro".to_string(),
+            theme_name: "One Dark".to_string(),
             theme_mode: "Dark".to_string(),
             editor_font_size: 14.0,
             ide_font_size: 20.0,

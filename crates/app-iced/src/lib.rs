@@ -485,9 +485,9 @@ impl LideApp {
             active_settings_tab: SettingsTab::Fonts,
             editor_font_size: 14.0,
             ai_endpoint: "http://localhost:11434".to_string(),
-            active_theme_name: "One Dark Pro".to_string(),
+            active_theme_name: "One Dark".to_string(),
             theme_mode: ThemeMode::Dark,
-            current_theme: crate::theme::ThemePalette::resolve("One Dark Pro", ThemeMode::Dark),
+            current_theme: crate::theme::ThemePalette::resolve("One Dark", ThemeMode::Dark),
             format_on_save_enabled: true,
             line_numbers_enabled: true,
             ide_font: "Quicksand".to_string(),
@@ -1348,9 +1348,9 @@ impl LideApp {
                     ThemeMode::Dark => {
                         if !self.active_theme_name.contains("Dark")
                             && !self.active_theme_name.contains("Nord")
-                            && !self.active_theme_name.contains("Pro")
+                            && !self.active_theme_name.contains("Dracula")
                         {
-                            self.active_theme_name = "One Dark Pro".to_string();
+                            self.active_theme_name = "One Dark".to_string();
                         }
                     }
                     ThemeMode::Light => {

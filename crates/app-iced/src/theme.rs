@@ -60,10 +60,10 @@ impl Default for ThemePalette {
 }
 
 impl ThemePalette {
-    /// 1. One Dark Pro (Default Dark)
-    pub fn one_dark_pro() -> Self {
+    /// 1. One Dark (Default Dark)
+    pub fn one_dark() -> Self {
         Self {
-            name: "One Dark Pro".to_string(),
+            name: "One Dark".to_string(),
             mode: ThemeMode::Dark,
             bg_app: Color::from_rgb(0.10, 0.11, 0.14),
             bg_editor: Color::from_rgb(0.12, 0.13, 0.17),
@@ -96,10 +96,15 @@ impl ThemePalette {
         }
     }
 
-    /// 2. Dracula Dark
-    pub fn dracula_dark() -> Self {
+    /// Backwards-compatible alias for `one_dark`.
+    pub fn one_dark_pro() -> Self {
+        Self::one_dark()
+    }
+
+    /// 2. Dracula
+    pub fn dracula() -> Self {
         Self {
-            name: "Dracula Dark".to_string(),
+            name: "Dracula".to_string(),
             mode: ThemeMode::Dark,
             bg_app: Color::from_rgb(0.13, 0.13, 0.17),
             bg_editor: Color::from_rgb(0.16, 0.16, 0.21),
@@ -132,10 +137,15 @@ impl ThemePalette {
         }
     }
 
-    /// 3. Nord Deep
-    pub fn nord_deep() -> Self {
+    /// Backwards-compatible alias for `dracula`.
+    pub fn dracula_dark() -> Self {
+        Self::dracula()
+    }
+
+    /// 3. Nord
+    pub fn nord() -> Self {
         Self {
-            name: "Nord Deep".to_string(),
+            name: "Nord".to_string(),
             mode: ThemeMode::Dark,
             bg_app: Color::from_rgb(0.14, 0.16, 0.20),
             bg_editor: Color::from_rgb(0.18, 0.20, 0.25),
@@ -352,10 +362,10 @@ impl ThemePalette {
     pub fn resolve(theme_name: &str, mode: ThemeMode) -> Self {
         match mode {
             ThemeMode::Dark => match theme_name {
-                "Dracula Dark" => Self::dracula_dark(),
-                "Nord Deep" => Self::nord_deep(),
+                "Dracula" | "Dracula Dark" => Self::dracula(),
+                "Nord" | "Nord Deep" => Self::nord(),
                 "GitHub Dark" => Self::github_dark(),
-                _ => Self::one_dark_pro(),
+                _ => Self::one_dark(),
             },
             ThemeMode::Light => match theme_name {
                 "GitHub Light" => Self::github_light(),
@@ -431,7 +441,7 @@ pub const BADGE_WARNING: Color = Color::from_rgb(0.90, 0.75, 0.48);
 pub const BADGE_INFO: Color = Color::from_rgb(0.38, 0.69, 0.94);
 pub const BADGE_SUCCESS: Color = Color::from_rgb(0.60, 0.76, 0.47);
 
-/// Returns the default One Dark Pro syntax color for a given `HighlightToken`.
+/// Returns the default One Dark syntax color for a given `HighlightToken`.
 pub fn token_color(token: Option<HighlightToken>) -> Color {
-    ThemePalette::one_dark_pro().token_color(token)
+    ThemePalette::one_dark().token_color(token)
 }

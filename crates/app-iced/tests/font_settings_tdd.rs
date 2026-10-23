@@ -152,7 +152,7 @@ fn test_2pane_settings_dialog_toggle_and_tab_transitions() {
 
     let _ = app.dispatch(EditorCommand::ToggleThemeMode);
     assert_eq!(app.theme_mode, ThemeMode::Dark);
-    assert_eq!(app.active_theme_name, "One Dark Pro");
+    assert_eq!(app.active_theme_name, "One Dark");
 
     // 4. Escape dismisses the modal dialog
     let _ = app.dispatch(EditorCommand::Escape);

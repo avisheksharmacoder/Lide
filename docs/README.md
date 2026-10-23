@@ -96,7 +96,7 @@ Lide was engineered as a single-binary, native alternative:
 - **Connection Health Telemetry:** Live status indicator dot in the bottom bar (Green = Connected, Yellow = Checking, Red = Error, Gray = Disconnected).
 
 ### 6. Dynamic Theme Engine & Settings Dialog
-- **9 Curated Themes:** Includes One Dark Pro, Dracula, Nord, GitHub Dark, Monokai Pro, Tokyo Night, Catppuccin Mocha, Solarized Dark, and Light+.
+- **8 Curated Open-Source Themes:** Dark mode (*One Dark*, *Dracula*, *Nord*, *GitHub Dark*) and Light mode (*One Light*, *GitHub Light*, *Solarized Light*, *Quiet Light*).
 - **Interactive Settings Dialog (`Ctrl+,`):**
   - Switch active editor font family (JetBrains Mono, Fira Code, Source Code Pro, Hack).
   - Adjust editor font size and line height sliders with live preview.

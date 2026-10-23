@@ -6,19 +6,19 @@ use lang_contract::HighlightToken;
 
 #[test]
 fn test_theme_palette_resolution_all_variants() {
-    // 1. Dark Palettes
-    let one_dark = ThemePalette::resolve("One Dark Pro", ThemeMode::Dark);
-    assert_eq!(one_dark.name, "One Dark Pro");
+    // 1. Dark Palettes (Canonical Open-Source Names)
+    let one_dark = ThemePalette::resolve("One Dark", ThemeMode::Dark);
+    assert_eq!(one_dark.name, "One Dark");
     assert_eq!(one_dark.mode, ThemeMode::Dark);
     assert_eq!(one_dark.bg_editor, iced::Color::from_rgb(0.12, 0.13, 0.17));
 
-    let dracula = ThemePalette::resolve("Dracula Dark", ThemeMode::Dark);
-    assert_eq!(dracula.name, "Dracula Dark");
+    let dracula = ThemePalette::resolve("Dracula", ThemeMode::Dark);
+    assert_eq!(dracula.name, "Dracula");
     assert_eq!(dracula.mode, ThemeMode::Dark);
     assert_eq!(dracula.bg_editor, iced::Color::from_rgb(0.16, 0.16, 0.21));
 
-    let nord = ThemePalette::resolve("Nord Deep", ThemeMode::Dark);
-    assert_eq!(nord.name, "Nord Deep");
+    let nord = ThemePalette::resolve("Nord", ThemeMode::Dark);
+    assert_eq!(nord.name, "Nord");
     assert_eq!(nord.mode, ThemeMode::Dark);
     assert_eq!(nord.bg_editor, iced::Color::from_rgb(0.18, 0.20, 0.25));
 
@@ -26,6 +26,11 @@ fn test_theme_palette_resolution_all_variants() {
     assert_eq!(gh_dark.name, "GitHub Dark");
     assert_eq!(gh_dark.mode, ThemeMode::Dark);
     assert_eq!(gh_dark.bg_editor, iced::Color::from_rgb(0.05, 0.07, 0.09));
+
+    // Backwards-compatible aliases
+    assert_eq!(ThemePalette::resolve("One Dark Pro", ThemeMode::Dark).name, "One Dark");
+    assert_eq!(ThemePalette::resolve("Dracula Dark", ThemeMode::Dark).name, "Dracula");
+    assert_eq!(ThemePalette::resolve("Nord Deep", ThemeMode::Dark).name, "Nord");
 
     // 2. Light Palettes
     let one_light = ThemePalette::resolve("One Light", ThemeMode::Light);
@@ -53,16 +58,16 @@ fn test_theme_palette_resolution_all_variants() {
 fn test_app_state_theme_transitions() {
     let mut app = LideApp::new(22.0, 792.0);
 
-    // Initial state: One Dark Pro
+    // Initial state: One Dark
     assert_eq!(app.theme_mode, ThemeMode::Dark);
-    assert_eq!(app.active_theme_name, "One Dark Pro");
-    assert_eq!(app.current_theme.name, "One Dark Pro");
+    assert_eq!(app.active_theme_name, "One Dark");
+    assert_eq!(app.current_theme.name, "One Dark");
     assert_eq!(app.current_theme.mode, ThemeMode::Dark);
 
-    // Switch to Dracula Dark
-    let _ = app.dispatch(EditorCommand::SetTheme("Dracula Dark".to_string()));
-    assert_eq!(app.active_theme_name, "Dracula Dark");
-    assert_eq!(app.current_theme.name, "Dracula Dark");
+    // Switch to Dracula
+    let _ = app.dispatch(EditorCommand::SetTheme("Dracula".to_string()));
+    assert_eq!(app.active_theme_name, "Dracula");
+    assert_eq!(app.current_theme.name, "Dracula");
     assert_eq!(app.current_theme.bg_editor, iced::Color::from_rgb(0.16, 0.16, 0.21));
 
     // Switch to Light Mode
@@ -81,14 +86,14 @@ fn test_app_state_theme_transitions() {
     // Toggle back to Dark Mode
     let _ = app.dispatch(EditorCommand::ToggleThemeMode);
     assert_eq!(app.theme_mode, ThemeMode::Dark);
-    assert_eq!(app.active_theme_name, "One Dark Pro");
-    assert_eq!(app.current_theme.name, "One Dark Pro");
+    assert_eq!(app.active_theme_name, "One Dark");
+    assert_eq!(app.current_theme.name, "One Dark");
 }
 
 #[test]
 fn test_theme_syntax_token_colors() {
-    let one_dark = ThemePalette::resolve("One Dark Pro", ThemeMode::Dark);
-    let dracula = ThemePalette::resolve("Dracula Dark", ThemeMode::Dark);
+    let one_dark = ThemePalette::resolve("One Dark", ThemeMode::Dark);
+    let dracula = ThemePalette::resolve("Dracula", ThemeMode::Dark);
 
     let kw_onedark = one_dark.token_color(Some(HighlightToken::Keyword));
     let kw_dracula = dracula.token_color(Some(HighlightToken::Keyword));
@@ -105,9 +110,9 @@ fn test_headless_render_across_all_themes() {
     app.load_buffer_text("def hello_lide():\n    print('Sub-millisecond SLA')\n".to_string());
 
     let themes = [
-        ("One Dark Pro", ThemeMode::Dark),
-        ("Dracula Dark", ThemeMode::Dark),
-        ("Nord Deep", ThemeMode::Dark),
+        ("One Dark", ThemeMode::Dark),
+        ("Dracula", ThemeMode::Dark),
+        ("Nord", ThemeMode::Dark),
         ("GitHub Dark", ThemeMode::Dark),
         ("One Light", ThemeMode::Light),
         ("GitHub Light", ThemeMode::Light),
